@@ -187,6 +187,46 @@ body {
   margin: 0;
 }
 
+/* === Today tab header — animated compass rose accent === */
+.tab-header--today {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.tab-header--today::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -56px;
+  width: 168px;
+  height: 168px;
+  transform: translateY(-50%) rotate(0deg);
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23F5F0E8' stroke-width='0.8'%3E%3Ccircle cx='50' cy='50' r='42'/%3E%3Ccircle cx='50' cy='50' r='28'/%3E%3C/g%3E%3Cg fill='%23F5F0E8'%3E%3Cpolygon points='50,8 53,50 50,50 47,50'/%3E%3Cpolygon points='50,92 53,50 50,50 47,50'/%3E%3Cpolygon points='8,50 50,53 50,50 50,47'/%3E%3Cpolygon points='92,50 50,53 50,50 50,47'/%3E%3C/g%3E%3Cg fill='%23F5F0E8' opacity='0.55'%3E%3Cpolygon points='79,21 52,49 50,50 51,48'/%3E%3Cpolygon points='21,79 49,52 50,50 48,51'/%3E%3Cpolygon points='79,79 52,51 50,50 51,52'/%3E%3Cpolygon points='21,21 49,48 50,50 48,49'/%3E%3C/g%3E%3Ccircle cx='50' cy='50' r='2.5' fill='%23C9A84C'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0.10;
+  pointer-events: none;
+  animation: compass-rotate 90s linear infinite;
+  z-index: 0;
+}
+
+.tab-header--today > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes compass-rotate {
+  from { transform: translateY(-50%) rotate(0deg); }
+  to   { transform: translateY(-50%) rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-header--today::before { animation: none; }
+}
+
 /* === Today tab === */
 .trip-status {
   display: flex;
@@ -1495,7 +1535,7 @@ body {
 
 /* === Info tab === */
 .tab-content--info {
-  padding: 16px 20px calc(var(--tab-bar-height) + 32px + var(--safe-bottom));
+  padding: 24px 20px calc(var(--tab-bar-height) + 32px + var(--safe-bottom));
 }
 
 .info-body {
