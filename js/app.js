@@ -468,15 +468,24 @@
   // ---- Expenses tab ----------------------------------------------------
 
   const EXPENSES_KEY = 'mm2026:expenses';
-  const EXPENSES_SEEDED_KEY = 'mm2026:expenses-seeded';
+  const EXPENSES_SEEDED_KEY = 'mm2026:expenses-seeded';        // v1 (kept for detection)
+  const EXPENSES_SEEDED_V2_KEY = 'mm2026:expenses-seeded-v2';  // v2 (current)
   const EXPENSES_VIEW_KEY = 'mm2026:expenses-view';
-  const EXPENSES_LAST_CATEGORY_KEY = 'mm2026:expenses-last-category';
+  const EXPENSES_LAST_SPLIT_KEY = 'mm2026:expenses-last-split';
+  const EXPENSES_LAST_PAID_BY_KEY = 'mm2026:expenses-last-paid-by';
   const EXPENSES_LAST_CURRENCY_KEY = 'mm2026:expenses-last-currency';
+  const EXPENSES_BREAKDOWN_SORT_KEY = 'mm2026:expenses-breakdown-sort';
 
-  const CATEGORY_META = {
-    SC_ONLY:   { label: 'S&C Only',    short: 'sc',    color: 'navy'  },
-    SPLIT_3:   { label: 'Split 3-way', short: 'split', color: 'slate' },
-    BRAD_ONLY: { label: 'Brad Only',   short: 'brad',  color: 'rust'  }
+  const SPLIT_META = {
+    SC_ONLY:   { label: 'S&C Only',    short: 'sc',     color: 'navy'  },
+    SPLIT_3:   { label: '3-way',       short: 'split',  color: 'slate' },
+    SPLIT_2:   { label: '2-way',       short: 'split2', color: 'gold'  },
+    BRAD_ONLY: { label: 'Brad Only',   short: 'brad',   color: 'rust'  }
+  };
+
+  const PAYER_META = {
+    SC:   { label: 'S&C Paid',  short: 'sc',   color: 'navy' },
+    BRAD: { label: 'Brad Paid', short: 'brad', color: 'rust' }
   };
 
   function getCadRate() {
@@ -491,16 +500,17 @@
       String(d.getDate()).padStart(2, '0');
   }
 
-  function loadExpenses() {
-    let seeded = null;
-    try { seeded = localStorage.getItem(EXPENSES_SEEDED_KEY); } catch (e) {}
-    if (!seeded) {
-      const seed = (window.TRIP && Array.isArray(window.TRIP.expenses)) ? window.TRIP.expenses : [];
-      try {
-        localStorage.setItem(EXPENSES_KEY, JSON.stringify(seed));
-        localStorage.setItem(EXPENSES_SEEDED_KEY, '1');
-      } catch (e) { /* private mode — fall through */ }
-    }
+  function migrateExpense(e) {
+    if (!e || typeof e !== 'object') return e;
+    const out = {};
+    for (const k in e) if (Object.prototype.hasOwnProperty.call(e, k)) out[k] = e[k];
+    if (!out.paidBy) out.paidBy = 'SC';
+    if (!out.splitType) out.splitType = out.category || 'SC_ONLY';
+    delete out.category;
+    return out;
+  }
+
+  function readStoredExpenses() {
     try {
       const raw = localStorage.getItem(EXPENSES_KEY);
       if (raw) {
@@ -508,7 +518,45 @@
         if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {}
-    return (window.TRIP && Array.isArray(window.TRIP.expenses)) ? window.TRIP.expenses.slice() : [];
+    return [];
+  }
+
+  function ensureV2Seeded() {
+    let v2 = null;
+    try { v2 = localStorage.getItem(EXPENSES_SEEDED_V2_KEY); } catch (e) {}
+    if (v2) return;
+
+    const fresh = (window.TRIP && Array.isArray(window.TRIP.expenses))
+      ? window.TRIP.expenses.map(migrateExpense)
+      : [];
+    const existing = readStoredExpenses();
+
+    let merged;
+    if (existing.length === 0) {
+      merged = fresh;
+    } else {
+      // Drop old preloaded entries; preserve user-added (migrated)
+      const userAdded = existing
+        .filter(function (e) { return !e.preloaded; })
+        .map(migrateExpense);
+      merged = fresh.concat(userAdded);
+    }
+
+    try {
+      localStorage.setItem(EXPENSES_KEY, JSON.stringify(merged));
+      localStorage.setItem(EXPENSES_SEEDED_V2_KEY, '1');
+    } catch (e) { /* private mode — fall through */ }
+  }
+
+  function loadExpenses() {
+    ensureV2Seeded();
+    const raw = readStoredExpenses();
+    if (raw.length === 0) {
+      return (window.TRIP && Array.isArray(window.TRIP.expenses))
+        ? window.TRIP.expenses.map(migrateExpense)
+        : [];
+    }
+    return raw.map(migrateExpense);
   }
 
   function saveExpenses(expenses) {
@@ -527,16 +575,28 @@
     try { localStorage.setItem(EXPENSES_VIEW_KEY, v); } catch (e) {}
   }
 
-  function readLastCategory() {
+  function readLastSplit() {
     try {
-      const v = localStorage.getItem(EXPENSES_LAST_CATEGORY_KEY);
-      if (v && CATEGORY_META[v]) return v;
+      const v = localStorage.getItem(EXPENSES_LAST_SPLIT_KEY);
+      if (v && SPLIT_META[v]) return v;
     } catch (e) {}
     return 'SPLIT_3';
   }
 
-  function writeLastCategory(c) {
-    try { localStorage.setItem(EXPENSES_LAST_CATEGORY_KEY, c); } catch (e) {}
+  function writeLastSplit(s) {
+    try { localStorage.setItem(EXPENSES_LAST_SPLIT_KEY, s); } catch (e) {}
+  }
+
+  function readLastPaidBy() {
+    try {
+      const v = localStorage.getItem(EXPENSES_LAST_PAID_BY_KEY);
+      if (v === 'SC' || v === 'BRAD') return v;
+    } catch (e) {}
+    return 'SC';
+  }
+
+  function writeLastPaidBy(p) {
+    try { localStorage.setItem(EXPENSES_LAST_PAID_BY_KEY, p); } catch (e) {}
   }
 
   function readLastCurrency() {
@@ -551,6 +611,23 @@
     try { localStorage.setItem(EXPENSES_LAST_CURRENCY_KEY, c); } catch (e) {}
   }
 
+  function readBreakdownSort() {
+    try {
+      const raw = localStorage.getItem(EXPENSES_BREAKDOWN_SORT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.col === 'date' || parsed.col === 'amount') && (parsed.dir === 'asc' || parsed.dir === 'desc')) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return { col: 'date', dir: 'desc' };
+  }
+
+  function writeBreakdownSort(sort) {
+    try { localStorage.setItem(EXPENSES_BREAKDOWN_SORT_KEY, JSON.stringify(sort)); } catch (e) {}
+  }
+
   function formatMoney(n) {
     return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
@@ -563,20 +640,52 @@
     return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   }
 
+  function bradShare(splitType, amount) {
+    const a = Number(amount) || 0;
+    if (splitType === 'SC_ONLY')   return 0;
+    if (splitType === 'SPLIT_3')   return a / 3;
+    if (splitType === 'SPLIT_2')   return a / 2;
+    if (splitType === 'BRAD_ONLY') return a;
+    return 0;
+  }
+
+  function scShare(splitType, amount) {
+    const a = Number(amount) || 0;
+    if (splitType === 'SC_ONLY')   return a;
+    if (splitType === 'SPLIT_3')   return a * 2 / 3;
+    if (splitType === 'SPLIT_2')   return a / 2;
+    if (splitType === 'BRAD_ONLY') return 0;
+    return 0;
+  }
+
   function computeTotals(expenses) {
-    let total = 0, sc = 0, split = 0, brad = 0;
+    let total = 0;
+    let bradOwesSC = 0;  // Brad reimburses S&C this much
+    let scOwesBrad = 0;  // S&C reimburses Brad this much
+    let scNet = 0;       // S&C cost responsibility (after settlement)
+    let bradNet = 0;     // Brad cost responsibility (after settlement)
+
     for (let i = 0; i < expenses.length; i++) {
-      const amt = Number(expenses[i].amount) || 0;
+      const e = expenses[i];
+      const amt = Number(e.amount) || 0;
+      const bs = bradShare(e.splitType, amt);
+      const ss = scShare(e.splitType, amt);
+
       total += amt;
-      if (expenses[i].category === 'SC_ONLY') sc += amt;
-      else if (expenses[i].category === 'SPLIT_3') split += amt;
-      else if (expenses[i].category === 'BRAD_ONLY') brad += amt;
+      bradNet += bs;
+      scNet += ss;
+
+      if (e.paidBy === 'SC')        bradOwesSC += bs;
+      else if (e.paidBy === 'BRAD') scOwesBrad += ss;
     }
-    const bradOwes = split / 3;
-    const scNet = sc + (split * 2 / 3);
+
     return {
-      total, sc, split, brad, bradOwes, scNet,
-      scPerPerson: scNet / 2
+      total: total,
+      bradOwesSC: bradOwesSC,
+      scOwesBrad: scOwesBrad,
+      netSettlement: bradOwesSC - scOwesBrad,
+      scNet: scNet,
+      bradNet: bradNet
     };
   }
 
@@ -632,10 +741,12 @@
 
   function expenseFormHtml() {
     const today = getRealTodayISO();
-    const lastCategory = readLastCategory();
+    const lastSplit = readLastSplit();
+    const lastPaidBy = readLastPaidBy();
     const lastCurrency = readLastCurrency();
-    function catActive(c) { return lastCategory === c ? ' is-active' : ''; }
-    function curActive(c) { return lastCurrency === c ? ' is-active' : ''; }
+    function splitActive(c) { return lastSplit === c ? ' is-active' : ''; }
+    function payerActive(p) { return lastPaidBy === p ? ' is-active' : ''; }
+    function curActive(c)   { return lastCurrency === c ? ' is-active' : ''; }
     return '<form id="expense-form" class="expense-form" novalidate>' +
       '<label class="form-field"><span class="form-field-label">Description</span>' +
       '<input class="form-input" name="description" required placeholder="What was it?" autocomplete="off"></label>' +
@@ -647,10 +758,19 @@
           '<button type="button" class="currency-btn' + curActive('CAD') + '" data-currency="CAD" aria-checked="' + (lastCurrency === 'CAD') + '" role="radio">CAD</button>' +
         '</div>' +
       '</div>' +
-      '<div class="category-picker" role="radiogroup" aria-label="Category">' +
-        '<button type="button" class="category-btn category-btn--sc' + catActive('SC_ONLY') + '" data-category="SC_ONLY" aria-checked="' + (lastCategory === 'SC_ONLY') + '" role="radio">S&amp;C Only</button>' +
-        '<button type="button" class="category-btn category-btn--split' + catActive('SPLIT_3') + '" data-category="SPLIT_3" aria-checked="' + (lastCategory === 'SPLIT_3') + '" role="radio">Split 3-way</button>' +
-        '<button type="button" class="category-btn category-btn--brad' + catActive('BRAD_ONLY') + '" data-category="BRAD_ONLY" aria-checked="' + (lastCategory === 'BRAD_ONLY') + '" role="radio">Brad Only</button>' +
+      '<div class="form-field"><span class="form-field-label">Who paid?</span>' +
+        '<div class="payer-picker" role="radiogroup" aria-label="Who paid">' +
+          '<button type="button" class="payer-btn payer-btn--sc' + payerActive('SC') + '" data-paid-by="SC" aria-checked="' + (lastPaidBy === 'SC') + '" role="radio">S&amp;C Paid</button>' +
+          '<button type="button" class="payer-btn payer-btn--brad' + payerActive('BRAD') + '" data-paid-by="BRAD" aria-checked="' + (lastPaidBy === 'BRAD') + '" role="radio">Brad Paid</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-field"><span class="form-field-label">Split how?</span>' +
+        '<div class="split-picker" role="radiogroup" aria-label="Split type">' +
+          '<button type="button" class="split-btn split-btn--sc' + splitActive('SC_ONLY') + '" data-split="SC_ONLY" aria-checked="' + (lastSplit === 'SC_ONLY') + '" role="radio">S&amp;C Only</button>' +
+          '<button type="button" class="split-btn split-btn--split' + splitActive('SPLIT_3') + '" data-split="SPLIT_3" aria-checked="' + (lastSplit === 'SPLIT_3') + '" role="radio">Split 3-way</button>' +
+          '<button type="button" class="split-btn split-btn--split2' + splitActive('SPLIT_2') + '" data-split="SPLIT_2" aria-checked="' + (lastSplit === 'SPLIT_2') + '" role="radio">Split 2-way</button>' +
+          '<button type="button" class="split-btn split-btn--brad' + splitActive('BRAD_ONLY') + '" data-split="BRAD_ONLY" aria-checked="' + (lastSplit === 'BRAD_ONLY') + '" role="radio">Brad Only</button>' +
+        '</div>' +
       '</div>' +
       '<label class="form-field"><span class="form-field-label">Date</span>' +
       '<input class="form-input" name="date" type="date" value="' + today + '" required></label>' +
@@ -663,29 +783,23 @@
     const form = body.querySelector('#expense-form');
     if (!form) return;
 
-    body.querySelectorAll('.currency-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        body.querySelectorAll('.currency-btn').forEach(function (b) {
-          b.classList.remove('is-active');
-          b.setAttribute('aria-checked', 'false');
+    function wireRadioGroup(selector, writer) {
+      body.querySelectorAll(selector).forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          body.querySelectorAll(selector).forEach(function (b) {
+            b.classList.remove('is-active');
+            b.setAttribute('aria-checked', 'false');
+          });
+          btn.classList.add('is-active');
+          btn.setAttribute('aria-checked', 'true');
+          if (writer) writer(btn);
         });
-        btn.classList.add('is-active');
-        btn.setAttribute('aria-checked', 'true');
-        writeLastCurrency(btn.dataset.currency);
       });
-    });
+    }
 
-    body.querySelectorAll('.category-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        body.querySelectorAll('.category-btn').forEach(function (b) {
-          b.classList.remove('is-active');
-          b.setAttribute('aria-checked', 'false');
-        });
-        btn.classList.add('is-active');
-        btn.setAttribute('aria-checked', 'true');
-        writeLastCategory(btn.dataset.category);
-      });
-    });
+    wireRadioGroup('.currency-btn', function (btn) { writeLastCurrency(btn.dataset.currency); });
+    wireRadioGroup('.payer-btn',    function (btn) { writeLastPaidBy(btn.dataset.paidBy); });
+    wireRadioGroup('.split-btn',    function (btn) { writeLastSplit(btn.dataset.split); });
 
     form.addEventListener('submit', handleExpenseSubmit);
   }
@@ -698,9 +812,11 @@
     const amountRaw = form.amount.value.trim();
     const date = form.date.value;
     const currencyBtn = form.querySelector('.currency-btn.is-active');
-    const categoryBtn = form.querySelector('.category-btn.is-active');
+    const payerBtn = form.querySelector('.payer-btn.is-active');
+    const splitBtn = form.querySelector('.split-btn.is-active');
     const currency = currencyBtn ? currencyBtn.dataset.currency : 'USD';
-    const category = categoryBtn ? categoryBtn.dataset.category : null;
+    const paidBy = payerBtn ? payerBtn.dataset.paidBy : null;
+    const splitType = splitBtn ? splitBtn.dataset.split : null;
 
     function showError(msg, fieldName) {
       if (errEl) {
@@ -714,7 +830,8 @@
     const parsed = parseFloat(amountRaw);
     if (!isFinite(parsed) || parsed <= 0) return showError('Enter an amount greater than zero.', 'amount');
     if (!date) return showError('Date is required.', 'date');
-    if (!category) return showError('Pick a category.');
+    if (!paidBy) return showError('Choose who paid.');
+    if (!splitType) return showError('Choose how to split.');
 
     if (errEl) errEl.hidden = true;
 
@@ -729,7 +846,8 @@
       amount: Math.round(usdAmount * 100) / 100,
       currency: currency,
       originalAmount: Math.round(parsed * 100) / 100,
-      category: category,
+      paidBy: paidBy,
+      splitType: splitType,
       preloaded: false,
       addedAt: Date.now()
     };
@@ -788,26 +906,38 @@
   }
 
   function expenseCardHtml(e) {
-    const meta = CATEGORY_META[e.category] || CATEGORY_META.SC_ONLY;
-    const short = meta.short;
+    const splitMeta = SPLIT_META[e.splitType] || SPLIT_META.SC_ONLY;
+    const payerMeta = PAYER_META[e.paidBy] || PAYER_META.SC;
+    const splitShort = splitMeta.short;
+    const payerShort = payerMeta.short;
+
     const amountText = e.currency === 'CAD'
       ? 'CAD $' + formatMoney(e.originalAmount) +
         '<span class="exp-card-usd"> (~$' + formatMoney(e.amount) + ' USD)</span>'
       : '$' + formatMoney(e.amount) + ' <span class="exp-card-usd-suffix">USD</span>';
+
+    const bradShareAmt = bradShare(e.splitType, e.amount);
+    const bradShareText = '<span class="exp-card-share">Brad: $' + formatMoney(bradShareAmt) + '</span>';
+
     const deleteBtn = e.preloaded
       ? ''
       : '<button type="button" class="exp-card-delete" data-id="' + escapeHtml(e.id) + '" aria-label="Delete expense">×</button>';
     const preloadedLabel = e.preloaded
       ? '<span class="exp-card-preloaded">pre-loaded</span>'
       : '';
-    return '<article class="exp-card exp-card--' + short + '" role="listitem">' +
+
+    return '<article class="exp-card exp-card--' + splitShort + '" role="listitem">' +
       '<div class="exp-card-top">' +
         '<p class="exp-card-desc">' + escapeHtml(e.description) + '</p>' +
         deleteBtn +
       '</div>' +
-      '<p class="exp-card-amount">' + amountText + '</p>' +
+      '<div class="exp-card-amount-row">' +
+        '<p class="exp-card-amount">' + amountText + '</p>' +
+        bradShareText +
+      '</div>' +
       '<div class="exp-card-bottom">' +
-        '<span class="exp-card-badge exp-card-badge--' + short + '">' + escapeHtml(meta.label) + '</span>' +
+        '<span class="exp-card-badge exp-card-badge--payer-' + payerShort + '">' + escapeHtml(payerMeta.label) + '</span>' +
+        '<span class="exp-card-badge exp-card-badge--' + splitShort + '">' + escapeHtml(splitMeta.label) + '</span>' +
         preloadedLabel +
       '</div>' +
       '</article>';
@@ -829,54 +959,107 @@
   function renderExpenseSummaryView() {
     const body = document.getElementById('expenses-body');
     if (!body) return;
-    const totals = computeTotals(loadExpenses());
+    const expenses = loadExpenses();
+    const totals = computeTotals(expenses);
+
+    let netLabel, netModifier;
+    if (totals.netSettlement > 0.005) {
+      netLabel = 'Brad owes S&C';
+      netModifier = 'net-brad';
+    } else if (totals.netSettlement < -0.005) {
+      netLabel = 'S&C owes Brad';
+      netModifier = 'net-sc';
+    } else {
+      netLabel = 'All square';
+      netModifier = 'net-zero';
+    }
+
     body.innerHTML =
       '<div class="summary-cards">' +
-        summaryCardHtml('Total spent', totals.total, 'all expenses combined') +
-        summaryCardHtml('Split 3-way total', totals.split, 'shared across all 3 travelers', 'split') +
-        summaryCardHtml('Brad owes Steve', totals.bradOwes, '1/3 of split 3-way total', 'gold') +
-        summaryCardHtml('S&C net cost', totals.scNet, 'after Brad reimburses', 'navy') +
-        summaryCardHtml('S&C per person', totals.scPerPerson, 'half of S&C net cost') +
+        summaryCardHtml('Brad owes S&C', totals.bradOwesSC, 'Brad’s share where S&C paid', 'gold') +
+        summaryCardHtml('S&C owes Brad', totals.scOwesBrad, 'S&C’s share where Brad paid', 'split') +
+        summaryCardHtml(netLabel, Math.abs(totals.netSettlement), 'net settlement after offsetting both directions', netModifier) +
+        summaryCardHtml('Total trip spend', totals.total, 'every expense combined') +
+        summaryCardHtml('S&C net cost', totals.scNet, 'what S&C ultimately bears', 'navy') +
+        summaryCardHtml('Brad net cost', totals.bradNet, 'what Brad ultimately bears', 'rust') +
       '</div>' +
-      breakdownTableHtml(totals);
+      breakdownTableHtml(expenses);
+
+    body.querySelectorAll('.breakdown-table .sortable').forEach(function (th) {
+      th.addEventListener('click', function () {
+        const col = th.dataset.col;
+        const current = readBreakdownSort();
+        let next;
+        if (current.col === col) {
+          next = { col: col, dir: current.dir === 'asc' ? 'desc' : 'asc' };
+        } else {
+          next = { col: col, dir: 'desc' };
+        }
+        writeBreakdownSort(next);
+        renderExpenseSummaryView();
+      });
+    });
   }
 
   function summaryCardHtml(label, value, sublabel, modifier) {
     const cls = 'summary-card' + (modifier ? ' summary-card--' + modifier : '');
+    const valueDisplay = (modifier === 'net-zero')
+      ? '<p class="summary-card-value">All square</p>'
+      : '<p class="summary-card-value">$' + formatMoney(value) + '</p>';
     return '<article class="' + cls + '">' +
       '<p class="summary-card-label">' + escapeHtml(label) + '</p>' +
-      '<p class="summary-card-value">$' + formatMoney(value) + '</p>' +
+      valueDisplay +
       (sublabel ? '<p class="summary-card-sublabel">' + escapeHtml(sublabel) + '</p>' : '') +
       '</article>';
   }
 
-  function breakdownTableHtml(t) {
-    function row(catLabel, short, total, scShare, bradShare) {
-      return '<tr>' +
-        '<td><span class="cat-dot cat-dot--' + short + '"></span>' + catLabel + '</td>' +
-        '<td>$' + formatMoney(total) + '</td>' +
-        '<td>$' + formatMoney(scShare) + '</td>' +
-        '<td>$' + formatMoney(bradShare) + '</td>' +
-        '</tr>';
+  function breakdownTableHtml(expenses) {
+    const sort = readBreakdownSort();
+    const sorted = expenses.slice().sort(function (a, b) {
+      let cmp = 0;
+      if (sort.col === 'amount') {
+        cmp = (Number(a.amount) || 0) - (Number(b.amount) || 0);
+        if (cmp === 0) cmp = (a.date < b.date) ? -1 : (a.date > b.date) ? 1 : 0;
+      } else {
+        cmp = (a.date < b.date) ? -1 : (a.date > b.date) ? 1 : 0;
+        if (cmp === 0) cmp = (a.addedAt || 0) - (b.addedAt || 0);
+      }
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+
+    function arrowFor(col) {
+      if (sort.col !== col) return '';
+      return sort.dir === 'asc' ? ' ▲' : ' ▼';
     }
-    return '<table class="breakdown-table" aria-label="Expense breakdown by category">' +
+
+    const rows = sorted.map(function (e) {
+      const splitMeta = SPLIT_META[e.splitType] || SPLIT_META.SC_ONLY;
+      const payerMeta = PAYER_META[e.paidBy] || PAYER_META.SC;
+      const bs = bradShare(e.splitType, e.amount);
+      const ss = scShare(e.splitType, e.amount);
+      return '<tr>' +
+        '<td class="bd-date">' + escapeHtml(formatDateShort(e.date)) + '</td>' +
+        '<td class="bd-item">' +
+          '<div class="bd-desc">' + escapeHtml(e.description) + '</div>' +
+          '<div class="bd-tags">' +
+            '<span class="exp-card-badge exp-card-badge--payer-' + payerMeta.short + '">' + escapeHtml(payerMeta.label) + '</span>' +
+            '<span class="exp-card-badge exp-card-badge--' + splitMeta.short + '">' + escapeHtml(splitMeta.label) + '</span>' +
+          '</div>' +
+        '</td>' +
+        '<td class="bd-num">$' + formatMoney(bs) + '</td>' +
+        '<td class="bd-num">$' + formatMoney(ss) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return '<table class="breakdown-table" aria-label="Per-expense breakdown">' +
       '<thead><tr>' +
-        '<th scope="col">Category</th>' +
-        '<th scope="col">Total</th>' +
-        '<th scope="col">S&amp;C share</th>' +
-        '<th scope="col">Brad share</th>' +
+        '<th scope="col" class="sortable" data-col="date">Date' + arrowFor('date') + '</th>' +
+        '<th scope="col">Item</th>' +
+        '<th scope="col" class="sortable" data-col="amount">Brad' + arrowFor('amount') + '</th>' +
+        '<th scope="col">S&amp;C</th>' +
       '</tr></thead>' +
-      '<tbody>' +
-        row('S&amp;C Only',    'sc',    t.sc,    t.sc,                0) +
-        row('Split 3-way',    'split', t.split, t.split * 2 / 3,    t.split / 3) +
-        row('Brad Only',      'brad',  t.brad,  0,                   t.brad) +
-        '<tr class="totals-row">' +
-          '<td>Total (USD)</td>' +
-          '<td>$' + formatMoney(t.total) + '</td>' +
-          '<td>$' + formatMoney(t.sc + t.split * 2 / 3) + '</td>' +
-          '<td>$' + formatMoney(t.brad + t.split / 3) + '</td>' +
-        '</tr>' +
-      '</tbody></table>';
+      '<tbody>' + rows + '</tbody>' +
+      '</table>';
   }
 
   // ---- Timeline tab ----------------------------------------------------

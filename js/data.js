@@ -590,7 +590,8 @@ window.TRIP = {
       amount: 774.45,
       currency: 'USD',
       originalAmount: 774.45,
-      category: 'SC_ONLY',
+      paidBy: 'SC',
+      splitType: 'SC_ONLY',
       preloaded: true
     },
     {
@@ -600,7 +601,8 @@ window.TRIP = {
       amount: 1359.23,
       currency: 'USD',
       originalAmount: 1359.23,
-      category: 'SC_ONLY',
+      paidBy: 'SC',
+      splitType: 'SC_ONLY',
       preloaded: true
     },
     {
@@ -610,7 +612,8 @@ window.TRIP = {
       amount: 30.80,
       currency: 'USD',
       originalAmount: 30.80,
-      category: 'SC_ONLY',
+      paidBy: 'SC',
+      splitType: 'SC_ONLY',
       preloaded: true
     },
     {
@@ -620,7 +623,8 @@ window.TRIP = {
       amount: 206.70,
       currency: 'USD',
       originalAmount: 206.70,
-      category: 'SPLIT_3',
+      paidBy: 'SC',
+      splitType: 'SPLIT_3',
       preloaded: true
     },
     {
@@ -630,7 +634,8 @@ window.TRIP = {
       amount: 677.78,
       currency: 'CAD',
       originalAmount: 935.33,
-      category: 'SC_ONLY',
+      paidBy: 'SC',
+      splitType: 'SC_ONLY',
       preloaded: true
     },
     {
@@ -640,7 +645,8 @@ window.TRIP = {
       amount: 1033.07,
       currency: 'CAD',
       originalAmount: 1425.64,
-      category: 'SC_ONLY',
+      paidBy: 'SC',
+      splitType: 'SC_ONLY',
       preloaded: true
     },
     {
@@ -650,7 +656,8 @@ window.TRIP = {
       amount: 32.97,
       currency: 'CAD',
       originalAmount: 45.50,
-      category: 'SPLIT_3',
+      paidBy: 'SC',
+      splitType: 'SPLIT_3',
       preloaded: true
     },
     {
@@ -660,7 +667,8 @@ window.TRIP = {
       amount: 765.33,
       currency: 'CAD',
       originalAmount: 1056.15,
-      category: 'SC_ONLY',
+      paidBy: 'SC',
+      splitType: 'SC_ONLY',
       preloaded: true
     },
     {
@@ -670,7 +678,8 @@ window.TRIP = {
       amount: 560.87,
       currency: 'CAD',
       originalAmount: 774.00,
-      category: 'SPLIT_3',
+      paidBy: 'SC',
+      splitType: 'SPLIT_3',
       preloaded: true
     },
     {
@@ -680,7 +689,8 @@ window.TRIP = {
       amount: 163.57,
       currency: 'CAD',
       originalAmount: 225.72,
-      category: 'SC_ONLY',
+      paidBy: 'SC',
+      splitType: 'SC_ONLY',
       preloaded: true
     },
     {
@@ -690,7 +700,8 @@ window.TRIP = {
       amount: 364.50,
       currency: 'USD',
       originalAmount: 364.50,
-      category: 'SPLIT_3',
+      paidBy: 'SC',
+      splitType: 'SPLIT_3',
       preloaded: true
     },
     {
@@ -700,7 +711,8 @@ window.TRIP = {
       amount: 487.91,
       currency: 'USD',
       originalAmount: 487.91,
-      category: 'SC_ONLY',
+      paidBy: 'SC',
+      splitType: 'SC_ONLY',
       preloaded: true
     },
     {
@@ -710,7 +722,8 @@ window.TRIP = {
       amount: 1159.28,
       currency: 'USD',
       originalAmount: 1159.28,
-      category: 'SPLIT_3',
+      paidBy: 'SC',
+      splitType: 'SPLIT_3',
       preloaded: true
     }
   ],
