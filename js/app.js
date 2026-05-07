@@ -1697,6 +1697,12 @@
     '<circle cx="11" cy="6.5" r="0.8" fill="currentColor"/>' +
     '</svg>';
 
+  const ICON_CAMERA =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M9 5l1.5-2h3L15 5h4a2 2 0 012 2v11a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h4z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/>' +
+    '<circle cx="12" cy="13" r="3.6" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+    '</svg>';
+
   function infoSectionHtml(title, innerHtml) {
     return '<section class="info-section">' +
       '<h2 class="info-section-header">' + escapeHtml(title) + '</h2>' +
@@ -1848,6 +1854,25 @@
       '</article>';
   }
 
+  function photosHtml(photos) {
+    if (!photos || !photos.albumUrl) return '';
+    const url = String(photos.albumUrl);
+    return '<article class="photos-card">' +
+      '<div class="photos-card-header">' +
+        '<div class="photos-card-icon">' + ICON_CAMERA + '</div>' +
+        '<div class="photos-card-text">' +
+          '<p class="photos-card-title">Maine &amp; Maritime 2026 Photos</p>' +
+          '<p class="photos-card-subtitle">Shared album — tap to view or add photos</p>' +
+        '</div>' +
+      '</div>' +
+      '<a class="photos-card-button" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' +
+        '<span>Open Shared Album</span>' +
+        '<span aria-hidden="true" class="photos-card-arrow">→</span>' +
+      '</a>' +
+      '<p class="photos-card-note">Anyone with this link can view and add photos</p>' +
+      '</article>';
+  }
+
   function laundryHtml(laundry) {
     if (!laundry) return '';
     return '<article class="laundry-card">' +
@@ -1879,6 +1904,7 @@
     }
     const info = window.TRIP.info;
     let html = '<div class="info-body">';
+    html += infoSectionHtml('Trip Photos', photosHtml(info.photos));
     html += infoSectionHtml('Key Deadlines', deadlineCardsHtml(info.keyDeadlines));
     html += infoSectionHtml('Time Zones', timeZonesHtml(info.timeZones));
     html += infoSectionHtml('Park Passes & Fees', parkPassesHtml(info.parkPasses));

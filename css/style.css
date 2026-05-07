@@ -2004,6 +2004,100 @@ body {
   gap: 10px;
 }
 
+/* --- Photos card --- */
+.photos-card {
+  background-color: var(--white);
+  border: 1px solid var(--cream-dark);
+  border-left: 3px solid var(--navy);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.photos-card-header {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.photos-card-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: var(--cream-dark);
+  color: var(--navy);
+}
+
+.photos-card-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.photos-card-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.photos-card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.25;
+  color: var(--navy);
+  margin: 0 0 2px;
+  letter-spacing: -0.005em;
+}
+
+.photos-card-subtitle {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.photos-card-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 16px;
+  background-color: var(--gold);
+  color: var(--navy);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  border-radius: 10px;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease, transform 120ms ease;
+  margin-bottom: 10px;
+}
+
+.photos-card-button:hover { background-color: #d4b75d; }
+.photos-card-button:active { transform: scale(0.99); }
+
+.photos-card-arrow {
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.photos-card-note {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  text-align: center;
+  margin: 0;
+}
+
 /* --- Key Deadlines --- */
 .deadline-card {
   background-color: var(--white);

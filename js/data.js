@@ -819,6 +819,10 @@ window.TRIP = {
       bestStop: 'Delta Hotels PEI',
       nights: 'Nights 8 – 10',
       detail: 'Complimentary guest laundromat on site, plus valet laundry service. Best laundry stop of the trip — roughly the midpoint.'
+    },
+
+    photos: {
+      albumUrl: 'https://photos.app.goo.gl/64fVRkdxJw3PFqRX9'
     }
   }
 
