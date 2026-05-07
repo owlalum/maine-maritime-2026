@@ -1493,6 +1493,508 @@ body {
   border-bottom: 0;
 }
 
+/* === Info tab === */
+.tab-content--info {
+  padding: 16px 20px calc(var(--tab-bar-height) + 32px + var(--safe-bottom));
+}
+
+.info-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.info-section-header {
+  background-color: var(--navy);
+  color: var(--cream);
+  padding: 12px 16px;
+  margin: 0;
+  border-radius: 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: -0.005em;
+}
+
+.info-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* --- Key Deadlines --- */
+.deadline-card {
+  background-color: var(--white);
+  border: 1px solid var(--cream-dark);
+  border-left: 3px solid var(--rust);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.deadline-card--past {
+  border-left-color: var(--success);
+  background-color: rgba(45, 122, 95, 0.04);
+  opacity: 0.78;
+}
+
+.deadline-date {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rust);
+  margin: 0 0 6px;
+}
+
+.deadline-card--past .deadline-date {
+  color: var(--success);
+}
+
+.deadline-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1.2;
+  color: var(--navy);
+  margin: 0 0 6px;
+  letter-spacing: -0.005em;
+}
+
+.deadline-action {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.deadline-card--past .deadline-title,
+.deadline-card--past .deadline-action {
+  color: var(--text-muted);
+}
+
+/* --- Time Zones --- */
+.tz-timeline {
+  display: flex;
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: var(--white);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 12px;
+}
+
+.tz-segment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 6px;
+  text-align: center;
+  min-width: 0;
+}
+
+.tz-segment--et {
+  background-color: var(--navy);
+  color: var(--cream);
+}
+
+.tz-segment--at {
+  background-color: var(--slate);
+  color: var(--white);
+}
+
+.tz-segment-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.tz-segment-dates {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.tz-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.tz-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.tz-zone-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tz-zone--et .tz-zone-dot { background-color: var(--navy); }
+.tz-zone--at .tz-zone-dot { background-color: var(--slate); }
+
+.tz-transitions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: var(--cream-dark);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.tz-transition {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.tz-arrow {
+  font-weight: 700;
+  flex-shrink: 0;
+  color: var(--rust);
+}
+
+.tz-transition--back .tz-arrow { color: var(--success); }
+
+.tz-tip {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  text-align: center;
+}
+
+/* --- Park Passes --- */
+.pass-card {
+  background-color: var(--white);
+  border: 1px solid var(--cream-dark);
+  border-left: 3px solid var(--gold);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.pass-card--canada { border-left-color: var(--rust); }
+.pass-card--usa    { border-left-color: var(--navy); }
+.pass-card--warning {
+  border-left-color: var(--rust);
+  background-color: rgba(196, 98, 45, 0.04);
+}
+
+.pass-card-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.2;
+  color: var(--navy);
+  margin: 0 0 4px;
+  letter-spacing: -0.005em;
+}
+
+.pass-card-amount {
+  font-family: 'SF Mono', 'Courier New', Consolas, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gold);
+  margin: 0 0 4px;
+}
+
+.pass-card--canada .pass-card-amount { color: var(--rust); }
+
+.pass-card-when {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  margin: 0 0 6px;
+}
+
+.pass-card-coverage {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* --- Contacts --- */
+.contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background-color: var(--white);
+  border: 1px solid var(--cream-dark);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.contact-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--cream-dark);
+  text-decoration: none;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease;
+}
+
+.contact-row:last-child { border-bottom: 0; }
+
+.contact-row:hover {
+  background-color: var(--cream-dark);
+}
+
+.contact-row svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--slate);
+}
+
+.contact-row-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.contact-row-value {
+  font-family: 'SF Mono', 'Courier New', Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+.contact-row--emergency {
+  background-color: rgba(196, 98, 45, 0.08);
+}
+.contact-row--emergency svg { color: var(--rust); }
+.contact-row--emergency .contact-row-label { font-weight: 700; color: var(--rust); }
+.contact-row--emergency .contact-row-value { color: var(--rust); }
+
+/* --- Payment warning card --- */
+.warning-card {
+  display: flex;
+  gap: 14px;
+  background-color: var(--rust);
+  color: var(--white);
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-md);
+}
+
+.warning-card-icon svg {
+  width: 28px;
+  height: 28px;
+  color: var(--white);
+  flex-shrink: 0;
+}
+
+.warning-card-body { flex: 1; }
+
+.warning-card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  margin: 0 0 8px;
+  color: var(--white);
+  letter-spacing: -0.005em;
+}
+
+.warning-card-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.warning-card-list li {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  padding-left: 16px;
+  position: relative;
+}
+
+.warning-card-list li::before {
+  content: '✕';
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.warning-card-note {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* --- Passport card --- */
+.passport-card {
+  display: flex;
+  gap: 14px;
+  background-color: var(--navy);
+  color: var(--cream);
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-md);
+}
+
+.passport-card-icon svg {
+  width: 28px;
+  height: 28px;
+  color: var(--cream);
+  flex-shrink: 0;
+}
+
+.passport-card-body { flex: 1; }
+
+.passport-card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  margin: 0 0 10px;
+  color: var(--cream);
+  letter-spacing: -0.005em;
+}
+
+.passport-card-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.passport-card-list li {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.45;
+  padding-left: 16px;
+  position: relative;
+  color: var(--cream);
+}
+
+.passport-card-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  background-color: var(--gold);
+  border-radius: 50%;
+}
+
+.passport-card-list strong {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.passport-card-note {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgba(245, 240, 232, 0.88);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.passport-card-tip {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--gold);
+  margin: 0;
+  letter-spacing: 0.005em;
+}
+
+/* --- Laundry card --- */
+.laundry-card {
+  display: flex;
+  gap: 14px;
+  background-color: var(--white);
+  border: 1px solid var(--cream-dark);
+  border-left: 3px solid var(--slate);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.laundry-card-icon svg {
+  width: 24px;
+  height: 24px;
+  color: var(--slate);
+  flex-shrink: 0;
+}
+
+.laundry-card-body { flex: 1; }
+
+.laundry-card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--navy);
+  margin: 0 0 2px;
+  letter-spacing: -0.005em;
+}
+
+.laundry-card-nights {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--slate);
+  margin: 0 0 6px;
+}
+
+.laundry-card-detail {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  margin: 0;
+}
+
 /* === Tab bar === */
 .tab-bar {
   position: fixed;

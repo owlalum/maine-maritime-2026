@@ -1071,6 +1071,222 @@
     timelineObserverInitialized = true;
   }
 
+  // ---- Info tab --------------------------------------------------------
+
+  const ICON_PASSPORT =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/>' +
+    '<circle cx="12" cy="11" r="3.2" stroke="currentColor" stroke-width="1.8" fill="none"/>' +
+    '<path d="M9 17h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+    '</svg>';
+
+  const ICON_TICKET =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M3 8a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 100 4v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 100-4V8z" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+    '<path d="M14 6v12" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/>' +
+    '</svg>';
+
+  const ICON_LAUNDRY =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+    '<circle cx="12" cy="13" r="4.5" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+    '<circle cx="8" cy="6.5" r="0.8" fill="currentColor"/>' +
+    '<circle cx="11" cy="6.5" r="0.8" fill="currentColor"/>' +
+    '</svg>';
+
+  function infoSectionHtml(title, innerHtml) {
+    return '<section class="info-section">' +
+      '<h2 class="info-section-header">' + escapeHtml(title) + '</h2>' +
+      '<div class="info-section-body">' + innerHtml + '</div>' +
+      '</section>';
+  }
+
+  function deadlineCardsHtml(deadlines) {
+    if (!Array.isArray(deadlines) || deadlines.length === 0) return '';
+    const today = getTodayISO();
+    return deadlines.map(function (d) {
+      const isPast = d.date < today;
+      const cls = 'deadline-card' + (isPast ? ' deadline-card--past' : '');
+      return '<article class="' + cls + '">' +
+        '<p class="deadline-date">' + escapeHtml(formatDateShort(d.date)) + (isPast ? ' · past' : '') + '</p>' +
+        '<h4 class="deadline-title">' + escapeHtml(d.title || '') + '</h4>' +
+        '<p class="deadline-action">' + escapeHtml(d.action || '') + '</p>' +
+        '</article>';
+    }).join('');
+  }
+
+  function timeZonesHtml(tz) {
+    if (!tz) return '';
+    return '<div class="tz-timeline" role="img" aria-label="Trip time zones from May 22 to June 6">' +
+        '<div class="tz-segment tz-segment--et" style="flex: 7">' +
+          '<span class="tz-segment-label">ET</span>' +
+          '<span class="tz-segment-dates">May 22 – 29</span>' +
+        '</div>' +
+        '<div class="tz-segment tz-segment--at" style="flex: 7">' +
+          '<span class="tz-segment-label">AT</span>' +
+          '<span class="tz-segment-dates">May 29 – Jun 5</span>' +
+        '</div>' +
+        '<div class="tz-segment tz-segment--et" style="flex: 2">' +
+          '<span class="tz-segment-label">ET</span>' +
+          '<span class="tz-segment-dates">Jun 5 – 6</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="tz-zones">' +
+        '<p class="tz-zone tz-zone--et"><span class="tz-zone-dot"></span><strong>Eastern Time</strong> · Maine + New Brunswick</p>' +
+        '<p class="tz-zone tz-zone--at"><span class="tz-zone-dot"></span><strong>Atlantic Time</strong> · Prince Edward Island + Nova Scotia (one hour ahead)</p>' +
+      '</div>' +
+      '<div class="tz-transitions">' +
+        '<p class="tz-transition tz-transition--forward"><span class="tz-arrow">⇨</span><span>Cross into PEI via Confederation Bridge — <strong>spring forward +1hr</strong> on May 29 (Day 8)</span></p>' +
+        '<p class="tz-transition tz-transition--back"><span class="tz-arrow">⇦</span><span>Dock in Bar Harbor on CAT Ferry — <strong>fall back −1hr</strong> on Jun 5 (Day 15)</span></p>' +
+      '</div>' +
+      '<p class="tz-tip">Set phones to auto time zone — it handles everything.</p>';
+  }
+
+  function parkPassesHtml(parks) {
+    if (!parks) return '';
+    function passCard(label, amount, when, coverage, modifier) {
+      const cls = 'pass-card' + (modifier ? ' pass-card--' + modifier : '');
+      return '<article class="' + cls + '">' +
+        '<p class="pass-card-label">' + escapeHtml(label) + '</p>' +
+        '<p class="pass-card-amount">' + escapeHtml(amount) + '</p>' +
+        '<p class="pass-card-when">' + escapeHtml(when) + '</p>' +
+        (coverage ? '<p class="pass-card-coverage">' + escapeHtml(coverage) + '</p>' : '') +
+        '</article>';
+    }
+    let html = '';
+    if (parks.acadiaVehicleFee) {
+      html += passCard(
+        'Acadia National Park',
+        parks.acadiaVehicleFee.amount + ' · vehicle fee at gate',
+        parks.acadiaVehicleFee.when,
+        parks.acadiaVehicleFee.coverage,
+        'usa'
+      );
+    }
+    if (parks.parksCanadaDiscovery) {
+      html += passCard(
+        'Parks Canada Family/Group Discovery Pass',
+        parks.parksCanadaDiscovery.amount,
+        parks.parksCanadaDiscovery.when,
+        'Covers all 3 in vehicle for PEI National Park, Cape Breton Highlands, Bell NHS, Fortress of Louisbourg.',
+        'canada'
+      );
+    }
+    if (parks.hopewellRocks) {
+      html += passCard(
+        'Hopewell Rocks',
+        'Separate NB provincial gate admission',
+        'Pay at park gate Day 8 (May 29)',
+        parks.hopewellRocks.coverage,
+        'warning'
+      );
+    }
+    return html;
+  }
+
+  function contactsHtml(emergency) {
+    if (!emergency) return '';
+    const rows = [];
+    function addRow(label, value, isEmergency) {
+      if (!value) return;
+      const digits = cleanPhone(value);
+      const cls = 'contact-row' + (isEmergency ? ' contact-row--emergency' : '');
+      const href = digits ? 'tel:' + digits : '#';
+      rows.push('<a class="' + cls + '" href="' + escapeHtml(href) + '">' +
+        ICON_PHONE +
+        '<span class="contact-row-label">' + escapeHtml(label) + '</span>' +
+        '<span class="contact-row-value">' + escapeHtml(value) + '</span>' +
+        '</a>');
+    }
+    if (emergency.universal) {
+      rows.push('<a class="contact-row contact-row--emergency" href="tel:911">' +
+        ICON_PHONE +
+        '<span class="contact-row-label">Emergency (US &amp; Canada)</span>' +
+        '<span class="contact-row-value">' + escapeHtml(emergency.universal) + '</span>' +
+        '</a>');
+    }
+    addRow('Avis PWM counter', emergency.avisPwm);
+    addRow('Northumberland Ferries', emergency.northumberlandFerries);
+    addRow('Parks Canada', emergency.parksCanada);
+    addRow('Hardy Boat (puffin cruise)', emergency.hardyBoat);
+    addRow('Rum Runner Inn', emergency.rumRunnerInn);
+    addRow('Fore Street (Portland)', emergency.foreStreet);
+    addRow('Rossmount Inn (St. Andrews)', emergency.rossmountInn);
+    addRow('Beach Pea (Lunenburg)', emergency.beachPea);
+    return '<div class="contacts-list">' + rows.join('') + '</div>';
+  }
+
+  function paymentWarningHtml(payment) {
+    if (!payment || !Array.isArray(payment.noAmex) || payment.noAmex.length === 0) return '';
+    const items = payment.noAmex.map(function (n) { return '<li>' + escapeHtml(n) + '</li>'; }).join('');
+    return '<article class="warning-card">' +
+      '<div class="warning-card-icon">' + ICON_WARNING + '</div>' +
+      '<div class="warning-card-body">' +
+        '<p class="warning-card-title">Visa or Mastercard only — no American Express</p>' +
+        '<ul class="warning-card-list">' + items + '</ul>' +
+        (payment.note ? '<p class="warning-card-note">' + escapeHtml(payment.note) + '</p>' : '') +
+      '</div>' +
+      '</article>';
+  }
+
+  function passportHtml(border) {
+    if (!border) return '';
+    return '<article class="passport-card">' +
+      '<div class="passport-card-icon">' + ICON_PASSPORT + '</div>' +
+      '<div class="passport-card-body">' +
+        '<p class="passport-card-title">Passports required for Canada entry</p>' +
+        '<ul class="passport-card-list">' +
+          '<li><strong>Day 6 (May 27):</strong> Cross into New Brunswick at St. Stephen / Calais.</li>' +
+          '<li><strong>Day 15 (Jun 5):</strong> Return to US on CAT Ferry — US Customs processed on board.</li>' +
+        '</ul>' +
+        (border.note ? '<p class="passport-card-note">' + escapeHtml(border.note) + '</p>' : '') +
+        '<p class="passport-card-tip">Tip: Keep passports accessible in the car, not in checked luggage.</p>' +
+      '</div>' +
+      '</article>';
+  }
+
+  function laundryHtml(laundry) {
+    if (!laundry) return '';
+    return '<article class="laundry-card">' +
+      '<div class="laundry-card-icon">' + ICON_LAUNDRY + '</div>' +
+      '<div class="laundry-card-body">' +
+        '<p class="laundry-card-title">' + escapeHtml(laundry.bestStop) + '</p>' +
+        (laundry.nights ? '<p class="laundry-card-nights">' + escapeHtml(laundry.nights) + '</p>' : '') +
+        '<p class="laundry-card-detail">' + escapeHtml(laundry.detail) + '</p>' +
+      '</div>' +
+      '</article>';
+  }
+
+  function formatDateShort(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '';
+    const parts = iso.split('-').map(Number);
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(date.getTime())) return iso;
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  function renderInfo() {
+    const root = document.getElementById('info-content');
+    if (!root) return;
+    if (!window.TRIP || !window.TRIP.info) {
+      root.innerHTML = '<div class="info-body"><article class="card placeholder">' +
+        '<p class="card-eyebrow">No data</p>' +
+        '<h2 class="card-title">Info unavailable</h2></article></div>';
+      return;
+    }
+    const info = window.TRIP.info;
+    let html = '<div class="info-body">';
+    html += infoSectionHtml('Key Deadlines', deadlineCardsHtml(info.keyDeadlines));
+    html += infoSectionHtml('Time Zones', timeZonesHtml(info.timeZones));
+    html += infoSectionHtml('Park Passes & Fees', parkPassesHtml(info.parkPasses));
+    html += infoSectionHtml('Emergency & Key Contacts', contactsHtml(info.emergency));
+    html += infoSectionHtml('Payment Warnings', paymentWarningHtml(info.payment));
+    html += infoSectionHtml('Passport & Border', passportHtml(info.border));
+    html += infoSectionHtml('Laundry', laundryHtml(info.laundry));
+    html += '</div>';
+    root.innerHTML = html;
+  }
+
   // ---- Tab navigation --------------------------------------------------
 
   function readStoredTab() {
@@ -1136,6 +1352,7 @@
     renderBookings();
     renderExpenses();
     renderTimeline();
+    renderInfo();
   }
 
   function registerServiceWorker() {

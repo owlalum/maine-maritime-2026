@@ -775,12 +775,38 @@ window.TRIP = {
       acPortland: 'Standard guest WiFi'
     },
     keyDeadlines: [
-      { date: '2026-05-24', item: 'Cancel Algonquin Resort by today (24-hr notice for May 27 stay)' },
-      { date: '2026-05-24', item: 'Book Cadillac Mountain on recreation.gov at 10:00am ET' },
-      { date: '2026-05-26', item: 'Cancel Delta Hotels PEI by today (for May 29 stay)' },
-      { date: '2026-05-30', item: 'Cancel Rum Runner Inn by 4:00pm AT (for Jun 4 stay)' },
-      { date: '2026-06-03', item: 'Cancel AC Hotel Portland return by today (for Jun 5 stay)' }
-    ]
+      {
+        date: '2026-05-24',
+        title: 'Cadillac Mountain reservation',
+        action: 'Book at recreation.gov at 10:00am ET. $6/vehicle. For May 26 summit visit.'
+      },
+      {
+        date: '2026-05-25',
+        title: 'Acadia vehicle fee',
+        action: 'Pay $35 USD at gate (Day 4). Covers Days 4 & 5. No America the Beautiful pass needed.'
+      },
+      {
+        date: '2026-05-29',
+        title: 'Hopewell Rocks gate admission',
+        action: 'Separate NB provincial gate fee at park entry (Day 8). NOT covered by Parks Canada Discovery Pass. Aim for low tide for floor walk.'
+      },
+      {
+        date: '2026-05-30',
+        title: 'Parks Canada Discovery Pass',
+        action: 'Buy at PEI National Park gate (Day 9). CAD $167.50 Family/Group. Covers all 3 in vehicle for the trip.'
+      },
+      {
+        date: '2026-05-30',
+        title: 'Rum Runner Inn cancellation deadline',
+        action: 'Cancel by 4:00pm AT for Jun 4 stay. Visa/MC only — no Amex.'
+      }
+    ],
+
+    laundry: {
+      bestStop: 'Delta Hotels PEI',
+      nights: 'Nights 8 – 10',
+      detail: 'Complimentary guest laundromat on site, plus valet laundry service. Best laundry stop of the trip — roughly the midpoint.'
+    }
   }
 
 };
