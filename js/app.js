@@ -31,9 +31,27 @@
     return div.innerHTML;
   }
 
-  // ---- Completed days (shared by Today + Timeline) ---------------------
+  // ---- Firestore sync (expenses + completed days) ----------------------
 
-  const COMPLETED_DAYS_KEY = 'mm2026:completed-days';
+  const COMPLETED_DAYS_LEGACY_KEY = 'mm2026:completed-days'; // pre-Firestore key, migrated once
+  const FIRESTORE_SEEDED_KEY = 'mm2026:firestore-seeded';
+
+  let expenseCache = null;       // null = first snapshot pending
+  let completedCache = null;     // null = first snapshot pending
+  let initialExpensesReceived = false;
+  let initialCompletedReceived = false;
+  let expensesSubscribed = false;
+  let completedSubscribed = false;
+
+  function fb() { return window.MM2026_DB || null; }
+  function fbTimestamp() {
+    return window.MM2026_FB_TIMESTAMP ? window.MM2026_FB_TIMESTAMP() : null;
+  }
+
+  function isExpensesLoading() { return expenseCache === null; }
+  function isCompletedLoading() { return completedCache === null; }
+
+  // ---- Completed days (shared by Today + Timeline) ---------------------
 
   const ICON_CHECK =
     '<svg class="icon-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
@@ -51,33 +69,29 @@
     '</svg>';
 
   function getCompletedDays() {
-    try {
-      const raw = localStorage.getItem(COMPLETED_DAYS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(function (n) { return typeof n === 'number'; });
-        }
-      }
-    } catch (e) {}
-    return [];
-  }
-
-  function saveCompletedDays(arr) {
-    try { localStorage.setItem(COMPLETED_DAYS_KEY, JSON.stringify(arr)); } catch (e) {}
+    return Array.isArray(completedCache) ? completedCache.slice() : [];
   }
 
   function isDayCompleted(dayNum) {
-    return getCompletedDays().indexOf(dayNum) !== -1;
+    return Array.isArray(completedCache) && completedCache.indexOf(dayNum) !== -1;
   }
 
   function markDayComplete(dayNum) {
-    const completed = getCompletedDays();
-    if (completed.indexOf(dayNum) !== -1) return;
-    completed.push(dayNum);
-    completed.sort(function (a, b) { return a - b; });
-    saveCompletedDays(completed);
+    // Optimistic UI update so taps feel instant.
+    if (Array.isArray(completedCache) && completedCache.indexOf(dayNum) === -1) {
+      completedCache.push(dayNum);
+      completedCache.sort(function (a, b) { return a - b; });
+    }
     applyCompletionUiUpdates(dayNum);
+
+    const D = fb();
+    if (!D) return;
+    D.collection('trips/maine-2026/completedDays').doc(String(dayNum)).set({
+      dayNum: dayNum,
+      completedAt: fbTimestamp()
+    }).catch(function (err) {
+      console.error('Mark complete failed:', err);
+    });
   }
 
   function applyCompletionUiUpdates(dayNum) {
@@ -111,12 +125,32 @@
   }
 
   function unmarkDayComplete(dayNum) {
-    const completed = getCompletedDays();
-    const idx = completed.indexOf(dayNum);
-    if (idx === -1) return;
-    completed.splice(idx, 1);
-    saveCompletedDays(completed);
+    // Optimistic UI update.
+    if (Array.isArray(completedCache)) {
+      const idx = completedCache.indexOf(dayNum);
+      if (idx !== -1) completedCache.splice(idx, 1);
+    }
     applyUncompletedUiUpdates(dayNum);
+
+    const D = fb();
+    if (!D) return;
+    D.collection('trips/maine-2026/completedDays').doc(String(dayNum)).delete()
+      .catch(function (err) {
+        console.error('Unmark complete failed:', err);
+      });
+  }
+
+  function applyCompletionStateToAllUi() {
+    if (!Array.isArray(completedCache)) return;
+    if (!window.TRIP || !Array.isArray(window.TRIP.days)) return;
+    window.TRIP.days.forEach(function (day) {
+      const isCompleted = completedCache.indexOf(day.dayNum) !== -1;
+      if (isCompleted) {
+        applyCompletionUiUpdates(day.dayNum);
+      } else {
+        applyUncompletedUiUpdates(day.dayNum);
+      }
+    });
   }
 
   function applyUncompletedUiUpdates(dayNum) {
@@ -503,9 +537,7 @@
 
   // ---- Expenses tab ----------------------------------------------------
 
-  const EXPENSES_KEY = 'mm2026:expenses';
-  const EXPENSES_SEEDED_KEY = 'mm2026:expenses-seeded';        // v1 (kept for detection)
-  const EXPENSES_SEEDED_V2_KEY = 'mm2026:expenses-seeded-v2';  // v2 (current)
+  // Per-device preferences only — actual expense data lives in Firestore.
   const EXPENSES_VIEW_KEY = 'mm2026:expenses-view';
   const EXPENSES_LAST_SPLIT_KEY = 'mm2026:expenses-last-split';
   const EXPENSES_LAST_PAID_BY_KEY = 'mm2026:expenses-last-paid-by';
@@ -537,6 +569,7 @@
   }
 
   function migrateExpense(e) {
+    // Defensive shape coercion in case any pre-Firestore-shape entries surface.
     if (!e || typeof e !== 'object') return e;
     const out = {};
     for (const k in e) if (Object.prototype.hasOwnProperty.call(e, k)) out[k] = e[k];
@@ -546,57 +579,8 @@
     return out;
   }
 
-  function readStoredExpenses() {
-    try {
-      const raw = localStorage.getItem(EXPENSES_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {}
-    return [];
-  }
-
-  function ensureV2Seeded() {
-    let v2 = null;
-    try { v2 = localStorage.getItem(EXPENSES_SEEDED_V2_KEY); } catch (e) {}
-    if (v2) return;
-
-    const fresh = (window.TRIP && Array.isArray(window.TRIP.expenses))
-      ? window.TRIP.expenses.map(migrateExpense)
-      : [];
-    const existing = readStoredExpenses();
-
-    let merged;
-    if (existing.length === 0) {
-      merged = fresh;
-    } else {
-      // Drop old preloaded entries; preserve user-added (migrated)
-      const userAdded = existing
-        .filter(function (e) { return !e.preloaded; })
-        .map(migrateExpense);
-      merged = fresh.concat(userAdded);
-    }
-
-    try {
-      localStorage.setItem(EXPENSES_KEY, JSON.stringify(merged));
-      localStorage.setItem(EXPENSES_SEEDED_V2_KEY, '1');
-    } catch (e) { /* private mode — fall through */ }
-  }
-
   function loadExpenses() {
-    ensureV2Seeded();
-    const raw = readStoredExpenses();
-    if (raw.length === 0) {
-      return (window.TRIP && Array.isArray(window.TRIP.expenses))
-        ? window.TRIP.expenses.map(migrateExpense)
-        : [];
-    }
-    return raw.map(migrateExpense);
-  }
-
-  function saveExpenses(expenses) {
-    try { localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses)); } catch (e) {}
+    return Array.isArray(expenseCache) ? expenseCache.slice() : [];
   }
 
   function readExpensesView() {
@@ -873,10 +857,8 @@
 
     const rate = getCadRate();
     const usdAmount = currency === 'CAD' ? parsed / rate : parsed;
-    const id = 'exp-user-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
 
     const entry = {
-      id: id,
       date: date,
       description: description,
       amount: Math.round(usdAmount * 100) / 100,
@@ -885,25 +867,52 @@
       paidBy: paidBy,
       splitType: splitType,
       preloaded: false,
-      addedAt: Date.now()
+      createdAt: fbTimestamp()
     };
 
-    const expenses = loadExpenses();
-    expenses.push(entry);
-    saveExpenses(expenses);
+    const D = fb();
+    if (!D) {
+      showError('Cloud sync unavailable — try again when reconnected.');
+      return;
+    }
 
-    form.description.value = '';
-    form.amount.value = '';
-    form.date.value = getRealTodayISO();
-    form.description.focus();
+    const submitBtn = form.querySelector('.form-submit');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving…';
+    }
 
-    renderExpenseLogList();
-    updateExpensesHeaderTotal();
+    D.collection('trips/maine-2026/expenses').add(entry).then(function () {
+      // Snapshot listener will re-render the log; just clear the inputs.
+      form.description.value = '';
+      form.amount.value = '';
+      form.date.value = getRealTodayISO();
+      form.description.focus();
+      if (errEl) errEl.hidden = true;
+    }).catch(function (err) {
+      console.error('Add expense failed:', err);
+      showError('Could not save. Check connection and try again.');
+    }).finally(function () {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Expense';
+      }
+    });
+  }
+
+  function loadingIndicatorHtml() {
+    return '<div class="loading-indicator" role="status" aria-label="Loading">' +
+      '<span class="dot"></span><span class="dot"></span><span class="dot"></span>' +
+      '</div>';
   }
 
   function renderExpenseLogList() {
     const list = document.getElementById('expense-log-list');
     if (!list) return;
+    if (isExpensesLoading()) {
+      list.innerHTML = loadingIndicatorHtml();
+      return;
+    }
     const expenses = loadExpenses();
     if (expenses.length === 0) {
       list.innerHTML = '<p class="expenses-empty">No expenses yet.</p>';
@@ -981,13 +990,13 @@
 
   function deleteExpense(id) {
     if (!id) return;
-    const expenses = loadExpenses();
-    const idx = expenses.findIndex(function (e) { return e.id === id && !e.preloaded; });
-    if (idx === -1) return;
-    expenses.splice(idx, 1);
-    saveExpenses(expenses);
-    renderExpenseLogList();
-    updateExpensesHeaderTotal();
+    const target = (expenseCache || []).find(function (e) { return e.id === id; });
+    if (!target || target.preloaded) return; // never delete preloaded entries
+    const D = fb();
+    if (!D) return;
+    D.collection('trips/maine-2026/expenses').doc(id).delete().catch(function (err) {
+      console.error('Delete expense failed:', err);
+    });
   }
 
   // --- summary view ---
@@ -995,6 +1004,10 @@
   function renderExpenseSummaryView() {
     const body = document.getElementById('expenses-body');
     if (!body) return;
+    if (isExpensesLoading()) {
+      body.innerHTML = loadingIndicatorHtml();
+      return;
+    }
     const expenses = loadExpenses();
     const totals = computeTotals(expenses);
 
@@ -1579,6 +1592,183 @@
     }
   }
 
+  // ---- Firestore subscriptions / seeding / migration -------------------
+
+  function migrateLegacyCompletedDays() {
+    let raw;
+    try { raw = localStorage.getItem(COMPLETED_DAYS_LEGACY_KEY); } catch (e) { return Promise.resolve(); }
+    if (!raw) return Promise.resolve();
+
+    let days;
+    try { days = JSON.parse(raw); } catch (e) { days = null; }
+    if (!Array.isArray(days) || days.length === 0) {
+      try { localStorage.removeItem(COMPLETED_DAYS_LEGACY_KEY); } catch (e) {}
+      return Promise.resolve();
+    }
+
+    const D = fb();
+    if (!D) return Promise.resolve();
+
+    const batch = D.batch();
+    days.forEach(function (d) {
+      if (typeof d !== 'number' || !isFinite(d)) return;
+      const ref = D.collection('trips/maine-2026/completedDays').doc(String(d));
+      batch.set(ref, { dayNum: d, completedAt: fbTimestamp() }, { merge: true });
+    });
+    return batch.commit().then(function () {
+      try { localStorage.removeItem(COMPLETED_DAYS_LEGACY_KEY); } catch (e) {}
+    }).catch(function (err) {
+      console.error('Migrate legacy completed-days failed:', err);
+    });
+  }
+
+  function maybeSeedFirestore() {
+    let already;
+    try { already = localStorage.getItem(FIRESTORE_SEEDED_KEY); } catch (e) {}
+    if (already === '1') return Promise.resolve();
+
+    const D = fb();
+    if (!D || !window.TRIP || !Array.isArray(window.TRIP.expenses)) return Promise.resolve();
+
+    return D.collection('trips/maine-2026/expenses').limit(1).get().then(function (snap) {
+      if (!snap.empty) {
+        try { localStorage.setItem(FIRESTORE_SEEDED_KEY, '1'); } catch (e) {}
+        return;
+      }
+      const batch = D.batch();
+      window.TRIP.expenses.forEach(function (e) {
+        const ref = D.collection('trips/maine-2026/expenses').doc(e.id);
+        const data = {};
+        for (const k in e) {
+          if (Object.prototype.hasOwnProperty.call(e, k) && k !== 'id') data[k] = e[k];
+        }
+        data.createdAt = fbTimestamp();
+        batch.set(ref, data);
+      });
+      return batch.commit().then(function () {
+        try { localStorage.setItem(FIRESTORE_SEEDED_KEY, '1'); } catch (e) {}
+      });
+    }).catch(function (err) {
+      console.error('Seed Firestore failed:', err);
+    });
+  }
+
+  function subscribeToExpenses() {
+    if (expensesSubscribed) return;
+    const D = fb();
+    if (!D) {
+      expenseCache = [];
+      renderExpenses();
+      updateExpensesHeaderTotal();
+      return;
+    }
+    expensesSubscribed = true;
+    D.collection('trips/maine-2026/expenses').onSnapshot(
+      function (snap) {
+        const docs = snap.docs.map(function (d) {
+          const data = d.data() || {};
+          return migrateExpense(Object.assign({ id: d.id }, data));
+        });
+        expenseCache = docs;
+        initialExpensesReceived = true;
+        if (document.getElementById('expenses-content')) renderExpenses();
+        updateExpensesHeaderTotal();
+      },
+      function (err) {
+        console.error('Expenses snapshot error:', err);
+        if (!initialExpensesReceived) {
+          expenseCache = [];
+          renderExpenses();
+        }
+      }
+    );
+  }
+
+  function subscribeToCompletedDays() {
+    if (completedSubscribed) return;
+    const D = fb();
+    if (!D) {
+      completedCache = [];
+      applyCompletionStateToAllUi();
+      return;
+    }
+    completedSubscribed = true;
+    D.collection('trips/maine-2026/completedDays').onSnapshot(
+      function (snap) {
+        const days = snap.docs.map(function (d) {
+          const docData = d.data() || {};
+          const fromData = Number(docData.dayNum);
+          if (Number.isFinite(fromData)) return fromData;
+          return Number(d.id);
+        }).filter(Number.isFinite);
+        completedCache = days;
+        initialCompletedReceived = true;
+        applyCompletionStateToAllUi();
+      },
+      function (err) {
+        console.error('Completed days snapshot error:', err);
+        if (!initialCompletedReceived) {
+          completedCache = [];
+          applyCompletionStateToAllUi();
+        }
+      }
+    );
+  }
+
+  function initFirestore() {
+    if (!fb()) {
+      console.warn('Firestore unavailable — falling back to empty caches.');
+      expenseCache = [];
+      completedCache = [];
+      renderExpenses();
+      updateExpensesHeaderTotal();
+      applyCompletionStateToAllUi();
+      showOfflineBannerIfOffline();
+      return;
+    }
+    // Best-effort migration + seed; subscriptions don't wait for these
+    // (onSnapshot will pick up writes when they land).
+    migrateLegacyCompletedDays();
+    maybeSeedFirestore();
+    subscribeToExpenses();
+    subscribeToCompletedDays();
+
+    // 5-second safety net — if no snapshot has arrived and we're offline,
+    // surface a banner so the user knows what's going on.
+    setTimeout(function () {
+      if (!initialExpensesReceived && !navigator.onLine) showOfflineBanner();
+    }, 5000);
+  }
+
+  // ---- Offline banner --------------------------------------------------
+
+  function showOfflineBanner() {
+    if (document.getElementById('offline-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'offline-banner';
+    banner.className = 'offline-banner';
+    banner.setAttribute('role', 'status');
+    banner.innerHTML =
+      '<span class="offline-banner-text">You’re offline. Changes will sync when you reconnect.</span>' +
+      '<button type="button" class="offline-banner-close" aria-label="Dismiss">×</button>';
+    banner.querySelector('.offline-banner-close').addEventListener('click', function () {
+      banner.remove();
+    });
+    document.body.appendChild(banner);
+  }
+
+  function showOfflineBannerIfOffline() {
+    if (!navigator.onLine) showOfflineBanner();
+  }
+
+  function attachConnectivityListeners() {
+    window.addEventListener('online', function () {
+      const banner = document.getElementById('offline-banner');
+      if (banner) banner.remove();
+    });
+    window.addEventListener('offline', showOfflineBanner);
+  }
+
   // ---- Tab navigation --------------------------------------------------
 
   function readStoredTab() {
@@ -1653,6 +1843,8 @@
     renderInfo();
     updateTodayHeaderTitle();
     attachHeaderScrollListeners();
+    attachConnectivityListeners();
+    initFirestore();
   }
 
   function registerServiceWorker() {

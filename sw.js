@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mm2026-v11';
+const CACHE_NAME = 'mm2026-v12';
 
 const ASSETS = [
   './',
@@ -6,9 +6,20 @@ const ASSETS = [
   './manifest.json',
   './icon.svg',
   './css/style.css',
+  './js/firebase.js',
   './js/data.js',
   './js/app.js',
-  'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap'
+  'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js'
+];
+
+const FIREBASE_BYPASS_HOSTS = [
+  'firestore.googleapis.com',
+  'firebase.googleapis.com',
+  'firebaseinstallations.googleapis.com',
+  'identitytoolkit.googleapis.com',
+  'securetoken.googleapis.com'
 ];
 
 self.addEventListener('install', (event) => {
@@ -32,6 +43,14 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  // Don't intercept Firestore / Firebase backend traffic — let it go directly
+  // to the network so Firestore's own offline persistence layer handles caching.
+  let url;
+  try { url = new URL(event.request.url); } catch (e) { return; }
+  if (FIREBASE_BYPASS_HOSTS.indexOf(url.hostname) !== -1) {
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
