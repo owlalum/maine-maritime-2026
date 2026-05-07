@@ -88,8 +88,8 @@
       const cardBtn = card.querySelector('.mark-complete-btn');
       if (cardBtn && !cardBtn.classList.contains('is-completed')) {
         cardBtn.classList.add('is-completed');
-        cardBtn.disabled = true;
-        cardBtn.innerHTML = ICON_CHECK + '<span>Completed</span>';
+        cardBtn.removeAttribute('disabled');
+        cardBtn.innerHTML = ICON_CHECK + '<span>Completed — tap to undo</span>';
       }
     }
     // Timeline: jump bar
@@ -107,6 +107,42 @@
       if (eyebrow && !eyebrow.querySelector('.completion-mark')) {
         eyebrow.insertAdjacentHTML('beforeend', ' <span class="completion-mark">✓ Completed</span>');
       }
+    }
+  }
+
+  function unmarkDayComplete(dayNum) {
+    const completed = getCompletedDays();
+    const idx = completed.indexOf(dayNum);
+    if (idx === -1) return;
+    completed.splice(idx, 1);
+    saveCompletedDays(completed);
+    applyUncompletedUiUpdates(dayNum);
+  }
+
+  function applyUncompletedUiUpdates(dayNum) {
+    // Timeline: day card
+    const card = document.getElementById('day-card-' + dayNum);
+    if (card) {
+      card.classList.remove('is-completed');
+      const cardBtn = card.querySelector('.mark-complete-btn');
+      if (cardBtn) {
+        cardBtn.classList.remove('is-completed');
+        cardBtn.removeAttribute('disabled');
+        cardBtn.innerHTML = ICON_CHECK + '<span>Mark Complete</span>';
+      }
+    }
+    // Timeline: jump bar
+    const jumpBtn = document.querySelector('#jump-bar .jump-day[data-day="' + dayNum + '"]');
+    if (jumpBtn) {
+      jumpBtn.classList.remove('is-completed');
+      const check = jumpBtn.querySelector('.jump-day-check');
+      if (check) check.remove();
+    }
+    // Today tab: remove completion mark from eyebrow
+    const todayCardDay = document.querySelector('#today-content .day-hero[data-day="' + dayNum + '"]');
+    if (todayCardDay) {
+      const mark = todayCardDay.querySelector('.completion-mark');
+      if (mark) mark.remove();
     }
   }
 
@@ -1117,7 +1153,7 @@
     }
 
     const markBtnHtml = isCompleted
-      ? '<button type="button" class="mark-complete-btn is-completed" disabled>' + ICON_CHECK + '<span>Completed</span></button>'
+      ? '<button type="button" class="mark-complete-btn is-completed" data-day="' + day.dayNum + '">' + ICON_CHECK + '<span>Completed — tap to undo</span></button>'
       : '<button type="button" class="mark-complete-btn" data-day="' + day.dayNum + '">' + ICON_CHECK + '<span>Mark Complete</span></button>';
 
     return '<article class="' + classes.join(' ') + '" id="day-card-' + day.dayNum + '" data-day="' + day.dayNum + '" data-expanded="' + isExpanded + '">' +
@@ -1189,11 +1225,16 @@
       });
     });
 
-    // Mark complete buttons
-    root.querySelectorAll('.mark-complete-btn:not(.is-completed)').forEach(function (btn) {
+    // Mark complete / unmark toggle
+    root.querySelectorAll('.mark-complete-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
         const dayNum = parseInt(btn.dataset.day, 10);
-        if (isFinite(dayNum)) markDayComplete(dayNum);
+        if (!isFinite(dayNum)) return;
+        if (btn.classList.contains('is-completed')) {
+          unmarkDayComplete(dayNum);
+        } else {
+          markDayComplete(dayNum);
+        }
       });
     });
 

@@ -771,11 +771,11 @@ body {
 
 .mark-complete-btn.is-completed {
   background-color: var(--success);
-  cursor: default;
+  cursor: pointer;
 }
 
-.mark-complete-btn.is-completed[disabled] {
-  opacity: 1;
+.mark-complete-btn.is-completed:hover {
+  background-color: #266a52;
 }
 
 /* Floating Today shortcut */
