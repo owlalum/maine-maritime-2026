@@ -1,0 +1,27 @@
+{
+  "name": "Maine & Maritime 2026",
+  "short_name": "M&M 2026",
+  "description": "Steve, Carey & Brad — 15-night road trip through Maine and Maritime Canada, May 22 – Jun 6, 2026.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0D2B45",
+  "background_color": "#F5F0E8",
+  "lang": "en-US",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

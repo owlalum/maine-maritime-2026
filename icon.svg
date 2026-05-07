@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Maine & Maritime 2026 compass rose">
+  <rect width="512" height="512" rx="96" ry="96" fill="#0D2B45"/>
+
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#F5F0E8" stroke-width="6" opacity="0.85"/>
+  <circle cx="256" cy="256" r="148" fill="none" stroke="#F5F0E8" stroke-width="2" opacity="0.4"/>
+
+  <g stroke="#0D2B45" stroke-width="2" stroke-linejoin="round">
+    <polygon points="256,72 280,256 256,256 232,256" fill="#C4622D"/>
+    <polygon points="256,440 280,256 256,256 232,256" fill="#F5F0E8"/>
+    <polygon points="72,256 256,232 256,256 256,280" fill="#F5F0E8"/>
+    <polygon points="440,256 256,232 256,256 256,280" fill="#F5F0E8"/>
+  </g>
+
+  <g fill="#F5F0E8" opacity="0.6">
+    <polygon points="386,126 270,242 256,256 242,242"/>
+    <polygon points="126,386 242,270 256,256 270,270"/>
+    <polygon points="386,386 270,270 256,256 242,270"/>
+    <polygon points="126,126 242,242 256,256 270,242"/>
+  </g>
+
+  <circle cx="256" cy="256" r="22" fill="#C9A84C" stroke="#0D2B45" stroke-width="3"/>
+  <circle cx="256" cy="256" r="6" fill="#0D2B45"/>
+
+  <g fill="#F5F0E8" font-family="Georgia, serif" font-size="28" font-weight="700" text-anchor="middle">
+    <text x="256" y="60">N</text>
+  </g>
+</svg>
