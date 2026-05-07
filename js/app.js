@@ -31,6 +31,85 @@
     return div.innerHTML;
   }
 
+  // ---- Completed days (shared by Today + Timeline) ---------------------
+
+  const COMPLETED_DAYS_KEY = 'mm2026:completed-days';
+
+  const ICON_CHECK =
+    '<svg class="icon-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M5 12l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
+    '</svg>';
+
+  const ICON_FORK =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M7 3v6a3 3 0 003 3v9M5 3v6M9 3v6M14 3a4 4 0 014 4v8h-3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
+    '</svg>';
+
+  const ICON_ARROW_RIGHT =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
+    '</svg>';
+
+  function getCompletedDays() {
+    try {
+      const raw = localStorage.getItem(COMPLETED_DAYS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(function (n) { return typeof n === 'number'; });
+        }
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function saveCompletedDays(arr) {
+    try { localStorage.setItem(COMPLETED_DAYS_KEY, JSON.stringify(arr)); } catch (e) {}
+  }
+
+  function isDayCompleted(dayNum) {
+    return getCompletedDays().indexOf(dayNum) !== -1;
+  }
+
+  function markDayComplete(dayNum) {
+    const completed = getCompletedDays();
+    if (completed.indexOf(dayNum) !== -1) return;
+    completed.push(dayNum);
+    completed.sort(function (a, b) { return a - b; });
+    saveCompletedDays(completed);
+    applyCompletionUiUpdates(dayNum);
+  }
+
+  function applyCompletionUiUpdates(dayNum) {
+    // Timeline: day card
+    const card = document.getElementById('day-card-' + dayNum);
+    if (card) {
+      card.classList.add('is-completed');
+      const cardBtn = card.querySelector('.mark-complete-btn');
+      if (cardBtn && !cardBtn.classList.contains('is-completed')) {
+        cardBtn.classList.add('is-completed');
+        cardBtn.disabled = true;
+        cardBtn.innerHTML = ICON_CHECK + '<span>Completed</span>';
+      }
+    }
+    // Timeline: jump bar
+    const jumpBtn = document.querySelector('#jump-bar .jump-day[data-day="' + dayNum + '"]');
+    if (jumpBtn && !jumpBtn.classList.contains('is-completed')) {
+      jumpBtn.classList.add('is-completed');
+      if (!jumpBtn.querySelector('.jump-day-check')) {
+        jumpBtn.insertAdjacentHTML('beforeend', '<span class="jump-day-check" aria-label="completed">✓</span>');
+      }
+    }
+    // Today tab: completion mark in eyebrow
+    const todayCardDay = document.querySelector('#today-content .day-hero[data-day="' + dayNum + '"]');
+    if (todayCardDay) {
+      const eyebrow = todayCardDay.querySelector('.card-eyebrow');
+      if (eyebrow && !eyebrow.querySelector('.completion-mark')) {
+        eyebrow.insertAdjacentHTML('beforeend', ' <span class="completion-mark">✓ Completed</span>');
+      }
+    }
+  }
+
   // ---- Today tab -------------------------------------------------------
 
   function findTodayContext() {
@@ -103,12 +182,24 @@
         '<span>' + escapeHtml(day.driving) + '</span></li>');
     }
 
-    return '<article class="day-hero">' +
-      '<p class="card-eyebrow">Day ' + day.dayNum + ' of ' + totalDays + '</p>' +
+    const completed = isDayCompleted(day.dayNum);
+    const completionMark = completed
+      ? ' <span class="completion-mark">✓ Completed</span>'
+      : '';
+
+    return '<article class="day-hero" data-day="' + day.dayNum + '">' +
+      '<p class="card-eyebrow">Day ' + day.dayNum + ' of ' + totalDays + completionMark + '</p>' +
       '<p class="day-hero-date">' + escapeHtml(day.dateDisplay) + '</p>' +
       '<h2 class="day-hero-title">' + escapeHtml(day.title) + '</h2>' +
       (meta.length ? '<ul class="day-meta">' + meta.join('') + '</ul>' : '') +
       '</article>';
+  }
+
+  function todayActionsHtml(day) {
+    return '<div class="today-actions">' +
+      '<button type="button" class="view-in-timeline-btn" data-day="' + day.dayNum + '">' +
+      'View in Timeline ' + ICON_ARROW_RIGHT + '</button>' +
+      '</div>';
   }
 
   function listSectionHtml(title, items, modifier) {
@@ -141,7 +232,19 @@
     html += listSectionHtml('Highlights', ctx.day.highlights);
     html += listSectionHtml('Meals', ctx.day.meals);
     html += listSectionHtml('Logistics', ctx.day.logistics, 'logistics');
+    html += todayActionsHtml(ctx.day);
     root.innerHTML = html;
+
+    const viewBtn = root.querySelector('.view-in-timeline-btn');
+    if (viewBtn) {
+      viewBtn.addEventListener('click', function () {
+        const dayNum = parseInt(viewBtn.dataset.day, 10);
+        setActiveTab('timeline');
+        requestAnimationFrame(function () {
+          scrollTimelineToDay(dayNum, true);
+        });
+      });
+    }
   }
 
   // ---- Bookings tab ----------------------------------------------------
@@ -776,6 +879,198 @@
       '</tbody></table>';
   }
 
+  // ---- Timeline tab ----------------------------------------------------
+
+  let timelineAutoScrolled = false;
+  let timelineObserverInitialized = false;
+
+  function jumpDayBtnHtml(dayNum, isToday, isCompleted) {
+    const classes = ['jump-day'];
+    if (isToday) classes.push('is-today');
+    if (isCompleted) classes.push('is-completed');
+    const checkmark = isCompleted ? '<span class="jump-day-check" aria-label="completed">✓</span>' : '';
+    return '<button type="button" class="' + classes.join(' ') + '" data-day="' + dayNum + '" aria-label="Jump to day ' + dayNum + '">' +
+      '<span class="jump-day-num">' + dayNum + '</span>' + checkmark +
+      '</button>';
+  }
+
+  function dayCardHtml(day, isToday, isCompleted) {
+    const isExpanded = isToday;
+    const classes = ['day-card'];
+    if (isToday) classes.push('is-today');
+    if (isCompleted) classes.push('is-completed');
+
+    const drivingRow = day.driving
+      ? '<p class="day-card-summary-row">' + ICON_CAR + '<span>' + escapeHtml(day.driving) + '</span></p>'
+      : '';
+    const hotelRow = day.hotel
+      ? '<p class="day-card-summary-row">' + ICON_BED + '<span>' + escapeHtml(day.hotel) + '</span></p>'
+      : '';
+    const summaryHtml = (drivingRow || hotelRow)
+      ? '<div class="day-card-summary">' + drivingRow + hotelRow + '</div>'
+      : '';
+
+    let detailHtml = '';
+    if (day.highlights && day.highlights.length) {
+      detailHtml += '<div class="day-card-detail-section">' +
+        '<h4 class="day-card-detail-title">Highlights</h4>' +
+        '<ul class="day-card-detail-list">' +
+        day.highlights.map(function (h) { return '<li>' + escapeHtml(h) + '</li>'; }).join('') +
+        '</ul></div>';
+    }
+    if (day.meals && day.meals.length) {
+      detailHtml += '<div class="day-card-detail-section day-card-detail-section--meals">' +
+        '<h4 class="day-card-detail-title">' + ICON_FORK + '<span>Meals</span></h4>' +
+        '<ul class="day-card-detail-list">' +
+        day.meals.map(function (m) { return '<li>' + escapeHtml(m) + '</li>'; }).join('') +
+        '</ul></div>';
+    }
+    if (day.logistics && day.logistics.length) {
+      detailHtml += '<div class="day-card-detail-section day-card-detail-section--logistics">' +
+        '<h4 class="day-card-detail-title"><span class="logistics-warning" aria-hidden="true">⚠</span><span>Logistics</span></h4>' +
+        '<ul class="day-card-detail-list">' +
+        day.logistics.map(function (l) { return '<li>' + escapeHtml(l) + '</li>'; }).join('') +
+        '</ul></div>';
+    }
+
+    const markBtnHtml = isCompleted
+      ? '<button type="button" class="mark-complete-btn is-completed" disabled>' + ICON_CHECK + '<span>Completed</span></button>'
+      : '<button type="button" class="mark-complete-btn" data-day="' + day.dayNum + '">' + ICON_CHECK + '<span>Mark Complete</span></button>';
+
+    return '<article class="' + classes.join(' ') + '" id="day-card-' + day.dayNum + '" data-day="' + day.dayNum + '" data-expanded="' + isExpanded + '">' +
+      '<button type="button" class="day-card-header" data-day="' + day.dayNum + '" aria-expanded="' + isExpanded + '" aria-controls="day-card-detail-' + day.dayNum + '">' +
+        '<span class="day-card-num">' + day.dayNum + '</span>' +
+        '<div class="day-card-meta">' +
+          '<p class="day-card-date">' + escapeHtml(day.dateDisplay) + '</p>' +
+          '<p class="day-card-title">' + escapeHtml(day.title) + '</p>' +
+        '</div>' +
+        (day.location ? '<span class="day-card-loc">' + escapeHtml(day.location) + '</span>' : '') +
+      '</button>' +
+      summaryHtml +
+      '<div class="day-card-detail" id="day-card-detail-' + day.dayNum + '">' +
+        detailHtml +
+        markBtnHtml +
+      '</div>' +
+      '</article>';
+  }
+
+  function renderTimeline() {
+    const root = document.getElementById('timeline-content');
+    if (!root) return;
+    if (!window.TRIP || !Array.isArray(window.TRIP.days)) {
+      root.innerHTML = '<div class="timeline-body"><article class="card placeholder">' +
+        '<p class="card-eyebrow">No data</p>' +
+        '<h2 class="card-title">Timeline unavailable</h2></article></div>';
+      return;
+    }
+
+    const ctx = findTodayContext();
+    const todayDayNum = ctx ? ctx.day.dayNum : 1;
+
+    let jumpBarHtml = '<nav class="jump-bar" id="jump-bar" aria-label="Jump to day">';
+    window.TRIP.days.forEach(function (day) {
+      jumpBarHtml += jumpDayBtnHtml(day.dayNum, day.dayNum === todayDayNum, isDayCompleted(day.dayNum));
+    });
+    jumpBarHtml += '</nav>';
+
+    let cardsHtml = '<div class="timeline-body">';
+    window.TRIP.days.forEach(function (day) {
+      cardsHtml += dayCardHtml(day, day.dayNum === todayDayNum, isDayCompleted(day.dayNum));
+    });
+    cardsHtml += '</div>';
+
+    const shortcutHtml = '<button type="button" class="today-shortcut" id="today-shortcut" aria-label="Scroll to today">Today ' + ICON_ARROW_RIGHT + '</button>';
+
+    root.innerHTML = jumpBarHtml + cardsHtml + shortcutHtml;
+    attachTimelineHandlers(root);
+    timelineObserverInitialized = false;
+  }
+
+  function attachTimelineHandlers(root) {
+    // Jump bar
+    root.querySelectorAll('#jump-bar .jump-day').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const dayNum = parseInt(btn.dataset.day, 10);
+        if (isFinite(dayNum)) scrollTimelineToDay(dayNum, true);
+      });
+    });
+
+    // Card header expand/collapse
+    root.querySelectorAll('.day-card-header').forEach(function (header) {
+      header.addEventListener('click', function () {
+        const card = header.closest('.day-card');
+        if (!card) return;
+        const expanded = card.dataset.expanded === 'true';
+        card.dataset.expanded = expanded ? 'false' : 'true';
+        header.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      });
+    });
+
+    // Mark complete buttons
+    root.querySelectorAll('.mark-complete-btn:not(.is-completed)').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const dayNum = parseInt(btn.dataset.day, 10);
+        if (isFinite(dayNum)) markDayComplete(dayNum);
+      });
+    });
+
+    // Floating Today shortcut
+    const shortcut = root.querySelector('#today-shortcut');
+    if (shortcut) {
+      shortcut.addEventListener('click', function () {
+        const ctx = findTodayContext();
+        const dayNum = ctx ? ctx.day.dayNum : 1;
+        const card = document.getElementById('day-card-' + dayNum);
+        if (card) {
+          card.dataset.expanded = 'true';
+          const header = card.querySelector('.day-card-header');
+          if (header) header.setAttribute('aria-expanded', 'true');
+          card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
+  }
+
+  function scrollTimelineToDay(dayNum, smooth) {
+    const card = document.getElementById('day-card-' + dayNum);
+    if (!card) return;
+    card.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+
+    // Brief visual highlight on the corresponding jump bar day
+    const jumpBtn = document.querySelector('#jump-bar .jump-day[data-day="' + dayNum + '"]');
+    if (jumpBtn) {
+      jumpBtn.classList.add('is-highlighted');
+      setTimeout(function () {
+        jumpBtn.classList.remove('is-highlighted');
+      }, 900);
+    }
+  }
+
+  function maybeScrollTimelineToToday() {
+    if (timelineAutoScrolled) return;
+    timelineAutoScrolled = true;
+    const ctx = findTodayContext();
+    const dayNum = ctx ? ctx.day.dayNum : 1;
+    scrollTimelineToDay(dayNum, false);
+  }
+
+  function setupTimelineObserver() {
+    if (timelineObserverInitialized) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+    const todayCard = document.querySelector('#timeline-content .day-card.is-today');
+    const shortcut = document.getElementById('today-shortcut');
+    const root = document.getElementById('timeline-content');
+    if (!todayCard || !shortcut || !root) return;
+
+    const observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        shortcut.classList.toggle('is-visible', !entry.isIntersecting);
+      });
+    }, { root: root, threshold: 0.05 });
+    observer.observe(todayCard);
+    timelineObserverInitialized = true;
+  }
+
   // ---- Tab navigation --------------------------------------------------
 
   function readStoredTab() {
@@ -816,6 +1111,13 @@
     });
 
     writeStoredTab(tab);
+
+    if (tab === 'timeline') {
+      requestAnimationFrame(function () {
+        maybeScrollTimelineToToday();
+        setupTimelineObserver();
+      });
+    }
   }
 
   function initTabs() {
@@ -833,6 +1135,7 @@
     renderToday();
     renderBookings();
     renderExpenses();
+    renderTimeline();
   }
 
   function registerServiceWorker() {
