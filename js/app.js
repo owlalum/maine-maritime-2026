@@ -362,6 +362,420 @@
     }
   }
 
+  // ---- Expenses tab ----------------------------------------------------
+
+  const EXPENSES_KEY = 'mm2026:expenses';
+  const EXPENSES_SEEDED_KEY = 'mm2026:expenses-seeded';
+  const EXPENSES_VIEW_KEY = 'mm2026:expenses-view';
+  const EXPENSES_LAST_CATEGORY_KEY = 'mm2026:expenses-last-category';
+  const EXPENSES_LAST_CURRENCY_KEY = 'mm2026:expenses-last-currency';
+
+  const CATEGORY_META = {
+    SC_ONLY:   { label: 'S&C Only',    short: 'sc',    color: 'navy'  },
+    SPLIT_3:   { label: 'Split 3-way', short: 'split', color: 'slate' },
+    BRAD_ONLY: { label: 'Brad Only',   short: 'brad',  color: 'rust'  }
+  };
+
+  function getCadRate() {
+    const info = window.TRIP && window.TRIP.info && window.TRIP.info.currency;
+    return (info && typeof info.cadToUsd === 'number') ? info.cadToUsd : 1.38;
+  }
+
+  function getRealTodayISO() {
+    const d = new Date();
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  function loadExpenses() {
+    let seeded = null;
+    try { seeded = localStorage.getItem(EXPENSES_SEEDED_KEY); } catch (e) {}
+    if (!seeded) {
+      const seed = (window.TRIP && Array.isArray(window.TRIP.expenses)) ? window.TRIP.expenses : [];
+      try {
+        localStorage.setItem(EXPENSES_KEY, JSON.stringify(seed));
+        localStorage.setItem(EXPENSES_SEEDED_KEY, '1');
+      } catch (e) { /* private mode — fall through */ }
+    }
+    try {
+      const raw = localStorage.getItem(EXPENSES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return (window.TRIP && Array.isArray(window.TRIP.expenses)) ? window.TRIP.expenses.slice() : [];
+  }
+
+  function saveExpenses(expenses) {
+    try { localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses)); } catch (e) {}
+  }
+
+  function readExpensesView() {
+    try {
+      const v = localStorage.getItem(EXPENSES_VIEW_KEY);
+      if (v === 'log' || v === 'summary') return v;
+    } catch (e) {}
+    return 'log';
+  }
+
+  function writeExpensesView(v) {
+    try { localStorage.setItem(EXPENSES_VIEW_KEY, v); } catch (e) {}
+  }
+
+  function readLastCategory() {
+    try {
+      const v = localStorage.getItem(EXPENSES_LAST_CATEGORY_KEY);
+      if (v && CATEGORY_META[v]) return v;
+    } catch (e) {}
+    return 'SPLIT_3';
+  }
+
+  function writeLastCategory(c) {
+    try { localStorage.setItem(EXPENSES_LAST_CATEGORY_KEY, c); } catch (e) {}
+  }
+
+  function readLastCurrency() {
+    try {
+      const v = localStorage.getItem(EXPENSES_LAST_CURRENCY_KEY);
+      if (v === 'USD' || v === 'CAD') return v;
+    } catch (e) {}
+    return 'USD';
+  }
+
+  function writeLastCurrency(c) {
+    try { localStorage.setItem(EXPENSES_LAST_CURRENCY_KEY, c); } catch (e) {}
+  }
+
+  function formatMoney(n) {
+    return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function formatDateLong(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '';
+    const parts = iso.split('-').map(Number);
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(date.getTime())) return iso;
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function computeTotals(expenses) {
+    let total = 0, sc = 0, split = 0, brad = 0;
+    for (let i = 0; i < expenses.length; i++) {
+      const amt = Number(expenses[i].amount) || 0;
+      total += amt;
+      if (expenses[i].category === 'SC_ONLY') sc += amt;
+      else if (expenses[i].category === 'SPLIT_3') split += amt;
+      else if (expenses[i].category === 'BRAD_ONLY') brad += amt;
+    }
+    const bradOwes = split / 3;
+    const scNet = sc + (split * 2 / 3);
+    return {
+      total, sc, split, brad, bradOwes, scNet,
+      scPerPerson: scNet / 2
+    };
+  }
+
+  function updateExpensesHeaderTotal() {
+    const span = document.getElementById('expenses-header-total');
+    if (!span) return;
+    const totals = computeTotals(loadExpenses());
+    span.textContent = '$' + formatMoney(totals.total);
+  }
+
+  // --- view layout ---
+
+  function renderExpenses() {
+    const root = document.getElementById('expenses-content');
+    if (!root) return;
+    if (!window.TRIP) {
+      root.innerHTML = '<div class="expenses-body"><article class="card placeholder">' +
+        '<p class="card-eyebrow">No data</p>' +
+        '<h2 class="card-title">Expenses unavailable</h2></article></div>';
+      return;
+    }
+    const view = readExpensesView();
+    root.innerHTML =
+      '<div class="expense-view-toggle">' +
+        '<button type="button" class="view-toggle-btn ' + (view === 'log' ? 'is-active' : '') + '" data-view="log">Log</button>' +
+        '<button type="button" class="view-toggle-btn ' + (view === 'summary' ? 'is-active' : '') + '" data-view="summary">Summary</button>' +
+      '</div>' +
+      '<div class="expenses-body" id="expenses-body"></div>';
+
+    root.querySelectorAll('.view-toggle-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        writeExpensesView(btn.dataset.view);
+        renderExpenses();
+      });
+    });
+
+    if (view === 'log') renderExpenseLogView();
+    else renderExpenseSummaryView();
+
+    updateExpensesHeaderTotal();
+  }
+
+  // --- log view ---
+
+  function renderExpenseLogView() {
+    const body = document.getElementById('expenses-body');
+    if (!body) return;
+    body.innerHTML = expenseFormHtml() +
+      '<div class="expense-log-list" id="expense-log-list" role="list"></div>';
+    attachExpenseFormHandlers(body);
+    renderExpenseLogList();
+  }
+
+  function expenseFormHtml() {
+    const today = getRealTodayISO();
+    const lastCategory = readLastCategory();
+    const lastCurrency = readLastCurrency();
+    function catActive(c) { return lastCategory === c ? ' is-active' : ''; }
+    function curActive(c) { return lastCurrency === c ? ' is-active' : ''; }
+    return '<form id="expense-form" class="expense-form" novalidate>' +
+      '<label class="form-field"><span class="form-field-label">Description</span>' +
+      '<input class="form-input" name="description" required placeholder="What was it?" autocomplete="off"></label>' +
+      '<div class="form-row">' +
+        '<label class="form-field form-field--amount"><span class="form-field-label">Amount</span>' +
+        '<input class="form-input" name="amount" inputmode="decimal" required placeholder="0.00" autocomplete="off"></label>' +
+        '<div class="currency-toggle" role="radiogroup" aria-label="Currency">' +
+          '<button type="button" class="currency-btn' + curActive('USD') + '" data-currency="USD" aria-checked="' + (lastCurrency === 'USD') + '" role="radio">USD</button>' +
+          '<button type="button" class="currency-btn' + curActive('CAD') + '" data-currency="CAD" aria-checked="' + (lastCurrency === 'CAD') + '" role="radio">CAD</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="category-picker" role="radiogroup" aria-label="Category">' +
+        '<button type="button" class="category-btn category-btn--sc' + catActive('SC_ONLY') + '" data-category="SC_ONLY" aria-checked="' + (lastCategory === 'SC_ONLY') + '" role="radio">S&amp;C Only</button>' +
+        '<button type="button" class="category-btn category-btn--split' + catActive('SPLIT_3') + '" data-category="SPLIT_3" aria-checked="' + (lastCategory === 'SPLIT_3') + '" role="radio">Split 3-way</button>' +
+        '<button type="button" class="category-btn category-btn--brad' + catActive('BRAD_ONLY') + '" data-category="BRAD_ONLY" aria-checked="' + (lastCategory === 'BRAD_ONLY') + '" role="radio">Brad Only</button>' +
+      '</div>' +
+      '<label class="form-field"><span class="form-field-label">Date</span>' +
+      '<input class="form-input" name="date" type="date" value="' + today + '" required></label>' +
+      '<button type="submit" class="form-submit">Add Expense</button>' +
+      '<p class="form-error" id="expense-form-error" hidden></p>' +
+      '</form>';
+  }
+
+  function attachExpenseFormHandlers(body) {
+    const form = body.querySelector('#expense-form');
+    if (!form) return;
+
+    body.querySelectorAll('.currency-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        body.querySelectorAll('.currency-btn').forEach(function (b) {
+          b.classList.remove('is-active');
+          b.setAttribute('aria-checked', 'false');
+        });
+        btn.classList.add('is-active');
+        btn.setAttribute('aria-checked', 'true');
+        writeLastCurrency(btn.dataset.currency);
+      });
+    });
+
+    body.querySelectorAll('.category-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        body.querySelectorAll('.category-btn').forEach(function (b) {
+          b.classList.remove('is-active');
+          b.setAttribute('aria-checked', 'false');
+        });
+        btn.classList.add('is-active');
+        btn.setAttribute('aria-checked', 'true');
+        writeLastCategory(btn.dataset.category);
+      });
+    });
+
+    form.addEventListener('submit', handleExpenseSubmit);
+  }
+
+  function handleExpenseSubmit(evt) {
+    evt.preventDefault();
+    const form = evt.target;
+    const errEl = form.querySelector('#expense-form-error');
+    const description = form.description.value.trim();
+    const amountRaw = form.amount.value.trim();
+    const date = form.date.value;
+    const currencyBtn = form.querySelector('.currency-btn.is-active');
+    const categoryBtn = form.querySelector('.category-btn.is-active');
+    const currency = currencyBtn ? currencyBtn.dataset.currency : 'USD';
+    const category = categoryBtn ? categoryBtn.dataset.category : null;
+
+    function showError(msg, fieldName) {
+      if (errEl) {
+        errEl.textContent = msg;
+        errEl.hidden = false;
+      }
+      if (fieldName && form[fieldName]) form[fieldName].focus();
+    }
+
+    if (!description) return showError('Description is required.', 'description');
+    const parsed = parseFloat(amountRaw);
+    if (!isFinite(parsed) || parsed <= 0) return showError('Enter an amount greater than zero.', 'amount');
+    if (!date) return showError('Date is required.', 'date');
+    if (!category) return showError('Pick a category.');
+
+    if (errEl) errEl.hidden = true;
+
+    const rate = getCadRate();
+    const usdAmount = currency === 'CAD' ? parsed / rate : parsed;
+    const id = 'exp-user-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+
+    const entry = {
+      id: id,
+      date: date,
+      description: description,
+      amount: Math.round(usdAmount * 100) / 100,
+      currency: currency,
+      originalAmount: Math.round(parsed * 100) / 100,
+      category: category,
+      preloaded: false,
+      addedAt: Date.now()
+    };
+
+    const expenses = loadExpenses();
+    expenses.push(entry);
+    saveExpenses(expenses);
+
+    form.description.value = '';
+    form.amount.value = '';
+    form.date.value = getRealTodayISO();
+    form.description.focus();
+
+    renderExpenseLogList();
+    updateExpensesHeaderTotal();
+  }
+
+  function renderExpenseLogList() {
+    const list = document.getElementById('expense-log-list');
+    if (!list) return;
+    const expenses = loadExpenses();
+    if (expenses.length === 0) {
+      list.innerHTML = '<p class="expenses-empty">No expenses yet.</p>';
+      return;
+    }
+
+    const sorted = expenses.slice().sort(function (a, b) {
+      if (a.date < b.date) return 1;
+      if (a.date > b.date) return -1;
+      return (b.addedAt || 0) - (a.addedAt || 0);
+    });
+
+    const dateOrder = [];
+    const groups = {};
+    sorted.forEach(function (e) {
+      if (!groups[e.date]) {
+        groups[e.date] = [];
+        dateOrder.push(e.date);
+      }
+      groups[e.date].push(e);
+    });
+
+    let html = '';
+    dateOrder.forEach(function (date) {
+      html += '<h4 class="expense-day-header">' + escapeHtml(formatDateLong(date)) + '</h4>';
+      groups[date].forEach(function (e) {
+        html += expenseCardHtml(e);
+      });
+    });
+
+    list.innerHTML = html;
+
+    list.querySelectorAll('.exp-card-delete').forEach(function (btn) {
+      btn.addEventListener('click', function () { deleteExpense(btn.dataset.id); });
+    });
+  }
+
+  function expenseCardHtml(e) {
+    const meta = CATEGORY_META[e.category] || CATEGORY_META.SC_ONLY;
+    const short = meta.short;
+    const amountText = e.currency === 'CAD'
+      ? 'CAD $' + formatMoney(e.originalAmount) +
+        '<span class="exp-card-usd"> (~$' + formatMoney(e.amount) + ' USD)</span>'
+      : '$' + formatMoney(e.amount) + ' <span class="exp-card-usd-suffix">USD</span>';
+    const deleteBtn = e.preloaded
+      ? ''
+      : '<button type="button" class="exp-card-delete" data-id="' + escapeHtml(e.id) + '" aria-label="Delete expense">×</button>';
+    const preloadedLabel = e.preloaded
+      ? '<span class="exp-card-preloaded">pre-loaded</span>'
+      : '';
+    return '<article class="exp-card exp-card--' + short + '" role="listitem">' +
+      '<div class="exp-card-top">' +
+        '<p class="exp-card-desc">' + escapeHtml(e.description) + '</p>' +
+        deleteBtn +
+      '</div>' +
+      '<p class="exp-card-amount">' + amountText + '</p>' +
+      '<div class="exp-card-bottom">' +
+        '<span class="exp-card-badge exp-card-badge--' + short + '">' + escapeHtml(meta.label) + '</span>' +
+        preloadedLabel +
+      '</div>' +
+      '</article>';
+  }
+
+  function deleteExpense(id) {
+    if (!id) return;
+    const expenses = loadExpenses();
+    const idx = expenses.findIndex(function (e) { return e.id === id && !e.preloaded; });
+    if (idx === -1) return;
+    expenses.splice(idx, 1);
+    saveExpenses(expenses);
+    renderExpenseLogList();
+    updateExpensesHeaderTotal();
+  }
+
+  // --- summary view ---
+
+  function renderExpenseSummaryView() {
+    const body = document.getElementById('expenses-body');
+    if (!body) return;
+    const totals = computeTotals(loadExpenses());
+    body.innerHTML =
+      '<div class="summary-cards">' +
+        summaryCardHtml('Total spent', totals.total, 'all expenses combined') +
+        summaryCardHtml('Split 3-way total', totals.split, 'shared across all 3 travelers', 'split') +
+        summaryCardHtml('Brad owes Steve', totals.bradOwes, '1/3 of split 3-way total', 'gold') +
+        summaryCardHtml('S&C net cost', totals.scNet, 'after Brad reimburses', 'navy') +
+        summaryCardHtml('S&C per person', totals.scPerPerson, 'half of S&C net cost') +
+      '</div>' +
+      breakdownTableHtml(totals);
+  }
+
+  function summaryCardHtml(label, value, sublabel, modifier) {
+    const cls = 'summary-card' + (modifier ? ' summary-card--' + modifier : '');
+    return '<article class="' + cls + '">' +
+      '<p class="summary-card-label">' + escapeHtml(label) + '</p>' +
+      '<p class="summary-card-value">$' + formatMoney(value) + '</p>' +
+      (sublabel ? '<p class="summary-card-sublabel">' + escapeHtml(sublabel) + '</p>' : '') +
+      '</article>';
+  }
+
+  function breakdownTableHtml(t) {
+    function row(catLabel, short, total, scShare, bradShare) {
+      return '<tr>' +
+        '<td><span class="cat-dot cat-dot--' + short + '"></span>' + catLabel + '</td>' +
+        '<td>$' + formatMoney(total) + '</td>' +
+        '<td>$' + formatMoney(scShare) + '</td>' +
+        '<td>$' + formatMoney(bradShare) + '</td>' +
+        '</tr>';
+    }
+    return '<table class="breakdown-table" aria-label="Expense breakdown by category">' +
+      '<thead><tr>' +
+        '<th scope="col">Category</th>' +
+        '<th scope="col">Total</th>' +
+        '<th scope="col">S&amp;C share</th>' +
+        '<th scope="col">Brad share</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+        row('S&amp;C Only',    'sc',    t.sc,    t.sc,                0) +
+        row('Split 3-way',    'split', t.split, t.split * 2 / 3,    t.split / 3) +
+        row('Brad Only',      'brad',  t.brad,  0,                   t.brad) +
+        '<tr class="totals-row">' +
+          '<td>Total (USD)</td>' +
+          '<td>$' + formatMoney(t.total) + '</td>' +
+          '<td>$' + formatMoney(t.sc + t.split * 2 / 3) + '</td>' +
+          '<td>$' + formatMoney(t.brad + t.split / 3) + '</td>' +
+        '</tr>' +
+      '</tbody></table>';
+  }
+
   // ---- Tab navigation --------------------------------------------------
 
   function readStoredTab() {
@@ -418,6 +832,7 @@
     initTabs();
     renderToday();
     renderBookings();
+    renderExpenses();
   }
 
   function registerServiceWorker() {
