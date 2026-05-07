@@ -543,6 +543,33 @@
   const EXPENSES_LAST_PAID_BY_KEY = 'mm2026:expenses-last-paid-by';
   const EXPENSES_LAST_CURRENCY_KEY = 'mm2026:expenses-last-currency';
   const EXPENSES_BREAKDOWN_SORT_KEY = 'mm2026:expenses-breakdown-sort';
+  const EXPENSES_SHOW_VOIDED_KEY = 'mm2026:show-voided';
+
+  // Per-card UI state (cleared on Save / Cancel / page reload)
+  let editingId = null;
+  let voidConfirmId = null;
+
+  const ICON_PENCIL =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>';
+
+  const ICON_X =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+    '<line x1="6" y1="18" x2="18" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+    '</svg>';
+
+  function readShowVoided() {
+    try { return localStorage.getItem(EXPENSES_SHOW_VOIDED_KEY) === '1'; } catch (e) { return false; }
+  }
+  function writeShowVoided(v) {
+    try { localStorage.setItem(EXPENSES_SHOW_VOIDED_KEY, v ? '1' : '0'); } catch (e) {}
+  }
+
+  function isAnyCardEditing() {
+    return editingId !== null;
+  }
 
   const SPLIT_META = {
     SC_ONLY:   { label: 'S&C Only',    short: 'sc',     color: 'navy'  },
@@ -684,10 +711,19 @@
     let scOwesBrad = 0;  // S&C reimburses Brad this much
     let scNet = 0;       // S&C cost responsibility (after settlement)
     let bradNet = 0;     // Brad cost responsibility (after settlement)
+    let voidedTotal = 0; // sum of voided amounts (excluded from everything else)
+    let voidedCount = 0;
 
     for (let i = 0; i < expenses.length; i++) {
       const e = expenses[i];
       const amt = Number(e.amount) || 0;
+
+      if (e.voided) {
+        voidedTotal += amt;
+        voidedCount += 1;
+        continue;
+      }
+
       const bs = bradShare(e.splitType, amt);
       const ss = scShare(e.splitType, amt);
 
@@ -705,7 +741,9 @@
       scOwesBrad: scOwesBrad,
       netSettlement: bradOwesSC - scOwesBrad,
       scNet: scNet,
-      bradNet: bradNet
+      bradNet: bradNet,
+      voidedTotal: voidedTotal,
+      voidedCount: voidedCount
     };
   }
 
@@ -713,7 +751,11 @@
     const span = document.getElementById('expenses-header-total');
     if (!span) return;
     const totals = computeTotals(loadExpenses());
-    span.textContent = '$' + formatMoney(totals.total);
+    let html = '$' + formatMoney(totals.total);
+    if (totals.voidedCount > 0) {
+      html += ' <span class="voided-count-badge">' + totals.voidedCount + ' voided</span>';
+    }
+    span.innerHTML = html;
   }
 
   // --- view layout ---
@@ -754,8 +796,18 @@
     const body = document.getElementById('expenses-body');
     if (!body) return;
     body.innerHTML = expenseFormHtml() +
+      '<div class="show-voided-row" id="show-voided-row" hidden>' +
+        '<button type="button" class="show-voided-toggle" id="show-voided-toggle"></button>' +
+      '</div>' +
       '<div class="expense-log-list" id="expense-log-list" role="list"></div>';
     attachExpenseFormHandlers(body);
+    const toggle = document.getElementById('show-voided-toggle');
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        writeShowVoided(!readShowVoided());
+        renderExpenseLogList();
+      });
+    }
     renderExpenseLogList();
   }
 
@@ -914,43 +966,89 @@
       return;
     }
     const expenses = loadExpenses();
+
+    // Capture in-progress edit form values so a snapshot mid-edit doesn't blow them away
+    const editFormSnapshot = captureEditFormState(list);
+
+    // Show-voided toggle row
+    const voided = expenses.filter(function (e) { return !!e.voided; });
+    const active = expenses.filter(function (e) { return !e.voided; });
+    const showVoided = readShowVoided();
+    const toggleRow = document.getElementById('show-voided-row');
+    const toggleBtn = document.getElementById('show-voided-toggle');
+    if (toggleRow && toggleBtn) {
+      if (voided.length === 0) {
+        toggleRow.hidden = true;
+      } else {
+        toggleRow.hidden = false;
+        toggleBtn.textContent = showVoided
+          ? 'Hide voided (' + voided.length + ')'
+          : 'Show voided (' + voided.length + ')';
+        toggleBtn.classList.toggle('is-active', showVoided);
+      }
+    }
+
     if (expenses.length === 0) {
       list.innerHTML = '<p class="expenses-empty">No expenses yet.</p>';
       return;
     }
 
-    const sorted = expenses.slice().sort(function (a, b) {
-      if (a.date < b.date) return 1;
-      if (a.date > b.date) return -1;
-      return (b.addedAt || 0) - (a.addedAt || 0);
-    });
+    function sortByDate(arr) {
+      return arr.slice().sort(function (a, b) {
+        if (a.date < b.date) return 1;
+        if (a.date > b.date) return -1;
+        return 0;
+      });
+    }
 
-    const dateOrder = [];
-    const groups = {};
-    sorted.forEach(function (e) {
-      if (!groups[e.date]) {
-        groups[e.date] = [];
-        dateOrder.push(e.date);
-      }
-      groups[e.date].push(e);
-    });
+    function groupedHtml(rows) {
+      const dateOrder = [];
+      const groups = {};
+      sortByDate(rows).forEach(function (e) {
+        if (!groups[e.date]) {
+          groups[e.date] = [];
+          dateOrder.push(e.date);
+        }
+        groups[e.date].push(e);
+      });
+      let h = '';
+      dateOrder.forEach(function (date) {
+        h += '<h4 class="expense-day-header">' + escapeHtml(formatDateLong(date)) + '</h4>';
+        groups[date].forEach(function (e) {
+          h += expenseCardHtml(e);
+        });
+      });
+      return h;
+    }
 
     let html = '';
-    dateOrder.forEach(function (date) {
-      html += '<h4 class="expense-day-header">' + escapeHtml(formatDateLong(date)) + '</h4>';
-      groups[date].forEach(function (e) {
+    if (active.length > 0) {
+      html += groupedHtml(active);
+    } else {
+      html += '<p class="expenses-empty">No active expenses.</p>';
+    }
+
+    if (showVoided && voided.length > 0) {
+      html += '<h4 class="expense-day-header expense-voided-header">Voided</h4>';
+      sortByDate(voided).forEach(function (e) {
         html += expenseCardHtml(e);
       });
-    });
+    }
 
     list.innerHTML = html;
 
-    list.querySelectorAll('.exp-card-delete').forEach(function (btn) {
-      btn.addEventListener('click', function () { deleteExpense(btn.dataset.id); });
-    });
+    if (editFormSnapshot) restoreEditFormState(list, editFormSnapshot);
+
+    attachLogListHandlers(list);
   }
 
   function expenseCardHtml(e) {
+    if (e.voided) return voidedCardHtml(e);
+    if (editingId === e.id) return editCardHtml(e);
+    return activeCardHtml(e);
+  }
+
+  function activeCardHtml(e) {
     const splitMeta = SPLIT_META[e.splitType] || SPLIT_META.SC_ONLY;
     const payerMeta = PAYER_META[e.paidBy] || PAYER_META.SC;
     const splitShort = splitMeta.short;
@@ -964,17 +1062,43 @@
     const bradShareAmt = bradShare(e.splitType, e.amount);
     const bradShareText = '<span class="exp-card-share">Brad: $' + formatMoney(bradShareAmt) + '</span>';
 
-    const deleteBtn = e.preloaded
-      ? ''
-      : '<button type="button" class="exp-card-delete" data-id="' + escapeHtml(e.id) + '" aria-label="Delete expense">×</button>';
+    const isLocked = isAnyCardEditing();
+
+    let actionsHtml;
+    if (voidConfirmId === e.id) {
+      actionsHtml =
+        '<div class="exp-card-confirm">' +
+          '<span class="exp-card-confirm-label">Void this expense?</span>' +
+          '<div class="exp-card-confirm-actions">' +
+            '<button type="button" class="exp-card-confirm-yes" data-id="' + escapeHtml(e.id) + '">Confirm</button>' +
+            '<button type="button" class="exp-card-confirm-no" data-id="' + escapeHtml(e.id) + '">Cancel</button>' +
+          '</div>' +
+        '</div>';
+    } else {
+      const dis = isLocked ? ' disabled' : '';
+      actionsHtml =
+        '<div class="exp-card-actions">' +
+          '<button type="button" class="exp-card-edit-btn" data-id="' + escapeHtml(e.id) + '" aria-label="Edit"' + dis + '>' +
+            ICON_PENCIL + '<span>Edit</span>' +
+          '</button>' +
+          '<button type="button" class="exp-card-void-btn" data-id="' + escapeHtml(e.id) + '" aria-label="Void"' + dis + '>' +
+            ICON_X + '<span>Void</span>' +
+          '</button>' +
+        '</div>';
+    }
+
     const preloadedLabel = e.preloaded
       ? '<span class="exp-card-preloaded">pre-loaded</span>'
       : '';
 
-    return '<article class="exp-card exp-card--' + splitShort + '" role="listitem">' +
+    const editedLabel = e.updatedAt
+      ? '<span class="exp-card-edited">edited</span>'
+      : '';
+
+    return '<article class="exp-card exp-card--' + splitShort + '" data-id="' + escapeHtml(e.id) + '" role="listitem">' +
       '<div class="exp-card-top">' +
         '<p class="exp-card-desc">' + escapeHtml(e.description) + '</p>' +
-        deleteBtn +
+        actionsHtml +
       '</div>' +
       '<div class="exp-card-amount-row">' +
         '<p class="exp-card-amount">' + amountText + '</p>' +
@@ -984,18 +1108,249 @@
         '<span class="exp-card-badge exp-card-badge--payer-' + payerShort + '">' + escapeHtml(payerMeta.label) + '</span>' +
         '<span class="exp-card-badge exp-card-badge--' + splitShort + '">' + escapeHtml(splitMeta.label) + '</span>' +
         preloadedLabel +
+        editedLabel +
       '</div>' +
       '</article>';
   }
 
-  function deleteExpense(id) {
+  function voidedCardHtml(e) {
+    const amountText = e.currency === 'CAD'
+      ? 'CAD $' + formatMoney(e.originalAmount) + ' (~$' + formatMoney(e.amount) + ' USD)'
+      : '$' + formatMoney(e.amount) + ' USD';
+    const preloadedLabel = e.preloaded
+      ? '<span class="exp-card-preloaded">pre-loaded</span>'
+      : '';
+    return '<article class="exp-card exp-card--voided" data-id="' + escapeHtml(e.id) + '" role="listitem">' +
+      '<div class="exp-card-top">' +
+        '<p class="exp-card-desc"><s>' + escapeHtml(e.description) + '</s></p>' +
+      '</div>' +
+      '<p class="exp-card-amount"><s>' + amountText + '</s></p>' +
+      '<div class="exp-card-bottom">' +
+        '<span class="exp-card-badge exp-card-badge--void">VOID</span>' +
+        preloadedLabel +
+      '</div>' +
+      '</article>';
+  }
+
+  function editCardHtml(e) {
+    const lastDesc = e.description == null ? '' : String(e.description);
+    const lastAmount = e.originalAmount != null ? e.originalAmount : (e.amount != null ? e.amount : '');
+    const lastCurrency = e.currency || 'USD';
+    const lastPaidBy = e.paidBy || 'SC';
+    const lastSplit = e.splitType || 'SC_ONLY';
+    const lastDate = e.date || getRealTodayISO();
+
+    function curActive(c)   { return lastCurrency === c ? ' is-active' : ''; }
+    function payerActive(p) { return lastPaidBy === p ? ' is-active' : ''; }
+    function splitActive(s) { return lastSplit === s ? ' is-active' : ''; }
+
+    return '<article class="exp-card exp-card--editing" data-id="' + escapeHtml(e.id) + '" data-editing="true" role="listitem">' +
+      '<form class="exp-card-edit-form" data-id="' + escapeHtml(e.id) + '" novalidate>' +
+        '<label class="form-field"><span class="form-field-label">Description</span>' +
+          '<input class="form-input" name="description" value="' + escapeHtml(lastDesc) + '" required></label>' +
+        '<div class="form-row">' +
+          '<label class="form-field form-field--amount"><span class="form-field-label">Amount</span>' +
+            '<input class="form-input" name="amount" inputmode="decimal" value="' + escapeHtml(String(lastAmount)) + '" required></label>' +
+          '<div class="currency-toggle" role="radiogroup" aria-label="Currency">' +
+            '<button type="button" class="currency-btn' + curActive('USD') + '" data-currency="USD" role="radio">USD</button>' +
+            '<button type="button" class="currency-btn' + curActive('CAD') + '" data-currency="CAD" role="radio">CAD</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="form-field"><span class="form-field-label">Who paid?</span>' +
+          '<div class="payer-picker" role="radiogroup" aria-label="Who paid">' +
+            '<button type="button" class="payer-btn payer-btn--sc' + payerActive('SC') + '" data-paid-by="SC" role="radio">S&amp;C Paid</button>' +
+            '<button type="button" class="payer-btn payer-btn--brad' + payerActive('BRAD') + '" data-paid-by="BRAD" role="radio">Brad Paid</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="form-field"><span class="form-field-label">Split how?</span>' +
+          '<div class="split-picker" role="radiogroup" aria-label="Split type">' +
+            '<button type="button" class="split-btn split-btn--sc' + splitActive('SC_ONLY') + '" data-split="SC_ONLY" role="radio">S&amp;C Only</button>' +
+            '<button type="button" class="split-btn split-btn--split' + splitActive('SPLIT_3') + '" data-split="SPLIT_3" role="radio">Split 3-way</button>' +
+            '<button type="button" class="split-btn split-btn--split2' + splitActive('SPLIT_2') + '" data-split="SPLIT_2" role="radio">Split 2-way</button>' +
+            '<button type="button" class="split-btn split-btn--brad' + splitActive('BRAD_ONLY') + '" data-split="BRAD_ONLY" role="radio">Brad Only</button>' +
+          '</div>' +
+        '</div>' +
+        '<label class="form-field"><span class="form-field-label">Date</span>' +
+          '<input class="form-input" name="date" type="date" value="' + escapeHtml(lastDate) + '" required></label>' +
+        '<p class="form-error" data-edit-error hidden></p>' +
+        '<div class="exp-card-edit-actions">' +
+          '<button type="button" class="form-cancel" data-id="' + escapeHtml(e.id) + '">Cancel</button>' +
+          '<button type="submit" class="form-submit form-submit--small">Save</button>' +
+        '</div>' +
+      '</form>' +
+      '</article>';
+  }
+
+  function captureEditFormState(list) {
+    if (!editingId) return null;
+    const form = list.querySelector('.exp-card-edit-form[data-id="' + cssEscape(editingId) + '"]');
+    if (!form) return null;
+    return {
+      id: editingId,
+      description: form.description.value,
+      amount: form.amount.value,
+      date: form.date.value,
+      currency: (form.querySelector('.currency-btn.is-active') || {}).dataset
+        ? form.querySelector('.currency-btn.is-active').dataset.currency : 'USD',
+      paidBy: (form.querySelector('.payer-btn.is-active') || {}).dataset
+        ? form.querySelector('.payer-btn.is-active').dataset.paidBy : 'SC',
+      splitType: (form.querySelector('.split-btn.is-active') || {}).dataset
+        ? form.querySelector('.split-btn.is-active').dataset.split : 'SC_ONLY'
+    };
+  }
+
+  function restoreEditFormState(list, snap) {
+    const form = list.querySelector('.exp-card-edit-form[data-id="' + cssEscape(snap.id) + '"]');
+    if (!form) return;
+    form.description.value = snap.description;
+    form.amount.value = snap.amount;
+    form.date.value = snap.date;
+    form.querySelectorAll('.currency-btn').forEach(function (b) {
+      b.classList.toggle('is-active', b.dataset.currency === snap.currency);
+    });
+    form.querySelectorAll('.payer-btn').forEach(function (b) {
+      b.classList.toggle('is-active', b.dataset.paidBy === snap.paidBy);
+    });
+    form.querySelectorAll('.split-btn').forEach(function (b) {
+      b.classList.toggle('is-active', b.dataset.split === snap.splitType);
+    });
+  }
+
+  function cssEscape(s) {
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(s);
+    return String(s).replace(/(["\\])/g, '\\$1');
+  }
+
+  function attachLogListHandlers(list) {
+    list.querySelectorAll('.exp-card-edit-btn:not([disabled])').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (isAnyCardEditing()) return;
+        editingId = btn.dataset.id;
+        voidConfirmId = null;
+        renderExpenseLogList();
+      });
+    });
+
+    list.querySelectorAll('.exp-card-void-btn:not([disabled])').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (isAnyCardEditing()) return;
+        voidConfirmId = btn.dataset.id;
+        renderExpenseLogList();
+      });
+    });
+
+    list.querySelectorAll('.exp-card-confirm-yes').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const id = btn.dataset.id;
+        voidConfirmId = null;
+        voidExpense(id);
+        renderExpenseLogList();
+      });
+    });
+
+    list.querySelectorAll('.exp-card-confirm-no').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        voidConfirmId = null;
+        renderExpenseLogList();
+      });
+    });
+
+    list.querySelectorAll('.form-cancel').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        editingId = null;
+        renderExpenseLogList();
+      });
+    });
+
+    list.querySelectorAll('.exp-card-edit-form').forEach(function (form) {
+      form.addEventListener('submit', handleEditSubmit);
+      form.querySelectorAll('.currency-btn, .payer-btn, .split-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const parent = btn.parentElement;
+          parent.querySelectorAll('button').forEach(function (b) {
+            b.classList.remove('is-active');
+            b.setAttribute('aria-checked', 'false');
+          });
+          btn.classList.add('is-active');
+          btn.setAttribute('aria-checked', 'true');
+        });
+      });
+    });
+  }
+
+  function voidExpense(id) {
     if (!id) return;
-    const target = (expenseCache || []).find(function (e) { return e.id === id; });
-    if (!target || target.preloaded) return; // never delete preloaded entries
     const D = fb();
     if (!D) return;
-    D.collection('trips/maine-2026/expenses').doc(id).delete().catch(function (err) {
-      console.error('Delete expense failed:', err);
+    D.collection('trips/maine-2026/expenses').doc(id).update({
+      voided: true,
+      voidedAt: fbTimestamp()
+    }).catch(function (err) {
+      console.error('Void expense failed:', err);
+    });
+  }
+
+  function handleEditSubmit(evt) {
+    evt.preventDefault();
+    const form = evt.target;
+    const id = form.dataset.id;
+    if (!id) return;
+
+    const errEl = form.querySelector('[data-edit-error]');
+    function showError(msg) {
+      if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
+    }
+
+    const description = form.description.value.trim();
+    const amountRaw = form.amount.value.trim();
+    const date = form.date.value;
+    const currencyBtn = form.querySelector('.currency-btn.is-active');
+    const payerBtn = form.querySelector('.payer-btn.is-active');
+    const splitBtn = form.querySelector('.split-btn.is-active');
+    const currency = currencyBtn ? currencyBtn.dataset.currency : 'USD';
+    const paidBy = payerBtn ? payerBtn.dataset.paidBy : null;
+    const splitType = splitBtn ? splitBtn.dataset.split : null;
+
+    if (!description) return showError('Description is required.');
+    const parsed = parseFloat(amountRaw);
+    if (!isFinite(parsed) || parsed <= 0) return showError('Enter an amount greater than zero.');
+    if (!date) return showError('Date is required.');
+    if (!paidBy) return showError('Choose who paid.');
+    if (!splitType) return showError('Choose how to split.');
+
+    if (errEl) errEl.hidden = true;
+
+    const rate = getCadRate();
+    const usdAmount = currency === 'CAD' ? parsed / rate : parsed;
+
+    const D = fb();
+    if (!D) return showError('Cloud sync unavailable — try again when reconnected.');
+
+    const submitBtn = form.querySelector('.form-submit');
+    const cancelBtn = form.querySelector('.form-cancel');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+    if (cancelBtn) cancelBtn.disabled = true;
+
+    const update = {
+      description: description,
+      originalAmount: Math.round(parsed * 100) / 100,
+      amount: Math.round(usdAmount * 100) / 100,
+      currency: currency,
+      paidBy: paidBy,
+      splitType: splitType,
+      date: date,
+      updatedAt: fbTimestamp()
+    };
+
+    D.collection('trips/maine-2026/expenses').doc(id).update(update).then(function () {
+      editingId = null;
+      // onSnapshot will re-render
+      renderExpenseLogList();
+    }).catch(function (err) {
+      console.error('Edit save failed:', err);
+      showError('Could not save. Check connection and try again.');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save'; }
+      if (cancelBtn) cancelBtn.disabled = false;
     });
   }
 
@@ -1064,7 +1419,10 @@
 
   function breakdownTableHtml(expenses) {
     const sort = readBreakdownSort();
-    const sorted = expenses.slice().sort(function (a, b) {
+    const active = expenses.filter(function (e) { return !e.voided; });
+    const voided = expenses.filter(function (e) { return !!e.voided; });
+    const voidedSum = voided.reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+    const sorted = active.slice().sort(function (a, b) {
       let cmp = 0;
       if (sort.col === 'amount') {
         cmp = (Number(a.amount) || 0) - (Number(b.amount) || 0);
@@ -1100,6 +1458,13 @@
         '</tr>';
     }).join('');
 
+    const voidedFooter = voided.length > 0
+      ? '<tfoot><tr class="bd-voided-row">' +
+          '<td colspan="3"><s>Voided (' + voided.length + ' entr' + (voided.length === 1 ? 'y' : 'ies') + ')</s></td>' +
+          '<td class="bd-num"><s>$' + formatMoney(voidedSum) + '</s></td>' +
+        '</tr></tfoot>'
+      : '';
+
     return '<table class="breakdown-table" aria-label="Per-expense breakdown">' +
       '<thead><tr>' +
         '<th scope="col" class="sortable" data-col="date">Date' + arrowFor('date') + '</th>' +
@@ -1108,6 +1473,7 @@
         '<th scope="col">S&amp;C</th>' +
       '</tr></thead>' +
       '<tbody>' + rows + '</tbody>' +
+      voidedFooter +
       '</table>';
   }
 

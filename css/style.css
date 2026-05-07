@@ -1411,28 +1411,285 @@ body {
   flex: 1;
 }
 
-.exp-card-delete {
+/* Card actions (Edit + Void) */
+.exp-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin: -2px -4px 0 0;
+}
+
+.exp-card-edit-btn,
+.exp-card-void-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid var(--cream-dark);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.exp-card-edit-btn { color: var(--slate); border-color: var(--slate-light); }
+.exp-card-void-btn { color: var(--rust);  border-color: rgba(196, 98, 45, 0.45); }
+
+.exp-card-edit-btn:hover:not([disabled]) {
+  background-color: var(--slate);
+  color: var(--white);
+  border-color: var(--slate);
+}
+
+.exp-card-void-btn:hover:not([disabled]) {
+  background-color: var(--rust);
+  color: var(--white);
+  border-color: var(--rust);
+}
+
+.exp-card-edit-btn[disabled],
+.exp-card-void-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.exp-card-edit-btn svg,
+.exp-card-void-btn svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+
+/* Inline void confirmation */
+.exp-card-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin: -2px -4px 0 0;
+}
+
+.exp-card-confirm-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rust);
+  letter-spacing: 0.02em;
+}
+
+.exp-card-confirm-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.exp-card-confirm-yes,
+.exp-card-confirm-no {
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  -webkit-tap-highlight-color: transparent;
+  border: 1px solid;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.exp-card-confirm-yes {
+  background-color: var(--rust);
+  color: var(--white);
+  border-color: var(--rust);
+}
+
+.exp-card-confirm-yes:hover {
+  background-color: #a85225;
+}
+
+.exp-card-confirm-no {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border-color: var(--cream-dark);
+}
+
+.exp-card-confirm-no:hover {
+  background-color: var(--cream-dark);
+  color: var(--navy);
+}
+
+/* Voided card */
+.exp-card--voided {
+  background-color: var(--cream-dark);
+  border-left-color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.exp-card--voided .exp-card-desc,
+.exp-card--voided .exp-card-amount {
+  color: var(--text-muted);
+}
+
+.exp-card-badge--void {
+  background-color: var(--rust);
+  color: var(--white);
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+
+/* Edited label */
+.exp-card-edited {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  margin-left: 4px;
+}
+
+/* Show voided toggle */
+.show-voided-row {
+  display: flex;
+  justify-content: center;
+  margin: -8px 0 16px;
+}
+
+.show-voided-toggle {
   appearance: none;
   -webkit-appearance: none;
   background-color: transparent;
-  border: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  font-size: 22px;
-  line-height: 1;
-  color: var(--text-muted);
+  border: 1px solid var(--cream-dark);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
   cursor: pointer;
-  flex-shrink: 0;
-  margin: -4px -6px 0 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.show-voided-toggle:hover {
+  background-color: var(--cream-dark);
+  color: var(--navy);
+}
+
+.show-voided-toggle.is-active {
+  background-color: var(--navy);
+  color: var(--cream);
+  border-color: var(--navy);
+}
+
+.expense-voided-header {
+  color: var(--text-muted);
+  font-style: italic;
+  border-top: 1px dashed var(--cream-dark);
+  padding-top: 14px;
+  margin-top: 18px;
+}
+
+/* Voided count badge in header */
+.voided-count-badge {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  background-color: rgba(196, 98, 45, 0.20);
+  color: var(--rust-light);
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Edit-mode card */
+.exp-card--editing {
+  border-left-color: var(--gold);
+  border-left-width: 4px;
+  padding: 14px 16px;
+  background-color: var(--white);
+  box-shadow: var(--shadow-md);
+}
+
+.exp-card-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exp-card-edit-form .form-input {
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.exp-card-edit-form .currency-btn,
+.exp-card-edit-form .payer-btn,
+.exp-card-edit-form .split-btn {
+  padding: 8px 4px;
+  font-size: 12px;
+}
+
+.exp-card-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.form-submit--small {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 14px;
+}
+
+.form-cancel {
+  flex: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: transparent;
+  border: 1px solid var(--cream-dark);
+  border-radius: 10px;
+  padding: 10px 0;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background-color 160ms ease, color 160ms ease;
 }
 
-.exp-card-delete:hover {
-  background-color: rgba(196, 98, 45, 0.10);
-  color: var(--rust);
+.form-cancel:hover {
+  background-color: var(--cream-dark);
+  color: var(--navy);
 }
+
+.form-cancel[disabled],
+.form-submit--small[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* Voided row in breakdown table */
+.bd-voided-row td {
+  background-color: var(--cream-dark);
+  color: var(--text-muted);
+  font-style: italic;
+  border-bottom: 0;
+  padding: 10px 8px;
+}
+.bd-voided-row td:first-child { padding-left: 14px; }
+.bd-voided-row td:last-child { padding-right: 14px; font-family: 'SF Mono', 'Courier New', Consolas, monospace; }
 
 .exp-card-amount-row {
   display: flex;
