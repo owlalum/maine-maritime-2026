@@ -91,6 +91,7 @@ window.TRIP = {
       ],
       meals: [],
       logistics: [
+        'BOOK Cadillac Mountain vehicle reservation TODAY at 10:00am ET on recreation.gov ($6/vehicle, for May 26 summit visit)',
         'Check out AC Hotel Portland in the morning',
         'Bass Cottage check-in after 3pm — Forget-me-not room (conf 31562645, 3 nights)',
         '$848.02 USD balance due at Bass Cottage checkout on May 27'
@@ -520,6 +521,28 @@ window.TRIP = {
       amount: 'est $1,159.28 USD',
       phone: '(207) 874-7500',
       payment: 'Visa/MC only — no Amex'
+    },
+    {
+      id: 'united-out',
+      category: 'flight',
+      name: 'United IAH → ORD → PWM (Brad)',
+      conf: 'INMW92',
+      date: '2026-05-22',
+      details: 'UA 2827 IAH→ORD depart 2:37pm arrive 5:33pm. UA 1401 ORD→PWM depart 6:18pm arrive 9:51pm.',
+      amount: 'Tracked by Brad',
+      phone: null,
+      payment: null
+    },
+    {
+      id: 'united-return',
+      category: 'flight',
+      name: 'United PWM → ORD → IAH (Brad)',
+      conf: 'INMW92',
+      date: '2026-06-06',
+      details: 'UA 723 PWM→ORD depart 6:00am. UA 535 ORD→IAH depart 8:51am.',
+      amount: 'Tracked by Brad',
+      phone: null,
+      payment: null
     }
   ],
 

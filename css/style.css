@@ -187,6 +187,164 @@ body {
   margin: 0;
 }
 
+/* === Today tab === */
+.trip-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--cream-dark);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  border-left: 3px solid var(--rust);
+}
+
+.trip-status--post {
+  border-left-color: var(--success);
+}
+
+.trip-status-label {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--rust);
+  flex-shrink: 0;
+}
+
+.trip-status--post .trip-status-label {
+  color: var(--success);
+}
+
+.trip-status-text {
+  color: var(--text-secondary);
+}
+
+.day-hero {
+  background-color: var(--white);
+  border-radius: 14px;
+  padding: 22px 24px 24px;
+  box-shadow: var(--shadow-md);
+  border-left: 3px solid var(--gold);
+  margin-bottom: 24px;
+}
+
+.day-hero .card-eyebrow {
+  margin-bottom: 10px;
+}
+
+.day-hero-date {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+
+.day-hero-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1.18;
+  color: var(--navy);
+  letter-spacing: -0.005em;
+  margin: 0 0 18px;
+}
+
+.day-meta {
+  list-style: none;
+  padding: 14px 0 0;
+  margin: 0;
+  border-top: 1px solid var(--cream-dark);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.day-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.day-meta-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--slate);
+}
+
+.day-section {
+  margin-bottom: 24px;
+}
+
+.day-section:last-child {
+  margin-bottom: 0;
+}
+
+.day-section-title {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--slate);
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.day-section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: var(--cream-dark);
+}
+
+.day-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.day-list li {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  padding-left: 18px;
+  position: relative;
+}
+
+.day-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 6px;
+  height: 6px;
+  background-color: var(--gold);
+  border-radius: 50%;
+}
+
+.day-section--logistics .day-list li::before {
+  background-color: var(--rust);
+}
+
 /* === Tab bar === */
 .tab-bar {
   position: fixed;
