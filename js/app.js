@@ -1511,6 +1511,74 @@
     root.innerHTML = html;
   }
 
+  // ---- Header scroll-shrink behavior -----------------------------------
+
+  const HEADER_COMPACT_THRESHOLD = 20;
+  const HEADER_HEIGHT_EXPANDED = '64px';
+  const HEADER_HEIGHT_COMPACT = '44px';
+  let headerCompact = false;
+  let headerScrollRaf = 0;
+
+  function setHeaderCompact(compact) {
+    if (compact === headerCompact) return;
+    headerCompact = compact;
+    document.querySelectorAll('.tab-header').forEach(function (h) {
+      h.classList.toggle('header--compact', compact);
+    });
+    document.documentElement.style.setProperty(
+      '--header-height',
+      compact ? HEADER_HEIGHT_COMPACT : HEADER_HEIGHT_EXPANDED
+    );
+  }
+
+  function resetHeader() {
+    setHeaderCompact(false);
+  }
+
+  function getActiveScrollTop() {
+    // The active scroll container could be either tab-content (if it's overflowing
+    // internally) or the window (when the page itself is taller than the viewport).
+    // Take the larger of the two so the header reacts to whichever is actually moving.
+    const activeSection = document.querySelector('.tab-section.is-active');
+    let internal = 0;
+    if (activeSection) {
+      const tc = activeSection.querySelector('.tab-content');
+      if (tc) internal = tc.scrollTop;
+    }
+    const win = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    return Math.max(internal, win);
+  }
+
+  function evaluateHeaderState() {
+    if (headerScrollRaf) return;
+    headerScrollRaf = requestAnimationFrame(function () {
+      headerScrollRaf = 0;
+      setHeaderCompact(getActiveScrollTop() > HEADER_COMPACT_THRESHOLD);
+    });
+  }
+
+  function attachHeaderScrollListeners() {
+    window.addEventListener('scroll', evaluateHeaderState, { passive: true });
+    document.querySelectorAll('.tab-content').forEach(function (tc) {
+      tc.addEventListener('scroll', evaluateHeaderState, { passive: true });
+    });
+  }
+
+  function updateTodayHeaderTitle() {
+    const titleEl = document.getElementById('header-today');
+    if (!titleEl) return;
+    const ctx = findTodayContext();
+    if (!ctx) {
+      titleEl.textContent = 'Today';
+      return;
+    }
+    if (ctx.mode === 'live' && window.TRIP && window.TRIP.meta) {
+      titleEl.textContent = 'Day ' + ctx.day.dayNum + ' of ' + window.TRIP.meta.days;
+    } else {
+      titleEl.textContent = 'Today';
+    }
+  }
+
   // ---- Tab navigation --------------------------------------------------
 
   function readStoredTab() {
@@ -1552,6 +1620,12 @@
 
     writeStoredTab(tab);
 
+    // Reset header to expanded state and scroll new tab to top
+    resetHeader();
+    const activeContent = document.querySelector('#tab-' + tab + ' .tab-content');
+    if (activeContent) activeContent.scrollTop = 0;
+    window.scrollTo(0, 0);
+
     if (tab === 'timeline') {
       requestAnimationFrame(function () {
         maybeScrollTimelineToToday();
@@ -1577,6 +1651,8 @@
     renderExpenses();
     renderTimeline();
     renderInfo();
+    updateTodayHeaderTitle();
+    attachHeaderScrollListeners();
   }
 
   function registerServiceWorker() {
